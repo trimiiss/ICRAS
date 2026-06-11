@@ -1,0 +1,5 @@
+vendor_id,vendor_name,contact_email,country,risk_tier,active,annual_spend_usd
+V-1001,Acme Corporation,contracts@acme.example.com,USA,low,true,250000
+V-2001,TechServe Solutions Ltd.,contracts@techserve.example.com,USA,medium,true,480000
+V-1002,Globex Industries,legal@globex.example.com,USA,medium,true,175000
+V-2002,DataFlow Inc.,legal@dataflow.example.com,Canada,low,true,120000

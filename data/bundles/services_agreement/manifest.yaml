@@ -1,0 +1,8 @@
+# Services Agreement Bundle Manifest
+bundle_name: services_agreement
+contract_file: contract.pdf
+contract_type: Master Services Agreement
+counterparty: TechServe Solutions Ltd.
+jurisdiction: New York, USA
+effective_date: "2025-03-01"
+description: Master Services Agreement for cloud infrastructure management services.

@@ -1,0 +1,21 @@
+# Clean NDA Jurisdiction Rules — Delaware, USA
+jurisdiction: Delaware, USA
+
+governing_law:
+  state: Delaware
+  country: USA
+
+regulatory_requirements:
+  - requirement: DTSA compliance
+    description: Must comply with the Defend Trade Secrets Act (18 U.S.C. § 1833).
+    severity_if_missing: HIGH
+
+  - requirement: whistleblower_notice
+    description: Must include immunity notice for whistleblower disclosures under DTSA.
+    severity_if_missing: MEDIUM
+
+statute_of_limitations_years: 3
+
+enforceability_notes:
+  - Non-compete clauses in NDAs may not be enforceable in Delaware without consideration.
+  - Delaware courts generally favour reasonable confidentiality terms.

@@ -1,0 +1,28 @@
+# Clean NDA Approval Policy
+approval_thresholds:
+  LOW:
+    auto_approve: true
+    required_approvers: []
+  MEDIUM:
+    auto_approve: false
+    required_approvers:
+      - legal_counsel
+  HIGH:
+    auto_approve: false
+    required_approvers:
+      - legal_counsel
+      - department_head
+  CRITICAL:
+    auto_approve: false
+    required_approvers:
+      - legal_counsel
+      - department_head
+      - cfo
+
+escalation_rules:
+  - condition: counterparty_is_new
+    action: add_approver
+    approver: procurement_manager
+  - condition: value_exceeds_100k
+    action: add_approver
+    approver: cfo

@@ -1,0 +1,27 @@
+# Clean NDA Playbook
+contract_type: Non-Disclosure Agreement
+
+required_clauses:
+  - clause_type: confidentiality_definition
+    description: Must define what constitutes confidential information.
+    severity_if_missing: HIGH
+
+  - clause_type: term_and_duration
+    description: Must specify the NDA duration and survival period.
+    severity_if_missing: MEDIUM
+
+  - clause_type: permitted_disclosures
+    description: Must list exceptions to confidentiality obligations.
+    severity_if_missing: MEDIUM
+
+  - clause_type: return_of_materials
+    description: Must require return or destruction of materials upon termination.
+    severity_if_missing: LOW
+
+prohibited_clauses:
+  - clause_type: non_compete
+    description: NDAs should not contain non-compete restrictions.
+    severity_if_present: HIGH
+
+max_term_years: 3
+max_survival_years: 5

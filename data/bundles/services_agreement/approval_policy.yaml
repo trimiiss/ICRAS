@@ -1,0 +1,32 @@
+# Services Agreement Approval Policy
+approval_thresholds:
+  LOW:
+    auto_approve: true
+    required_approvers: []
+  MEDIUM:
+    auto_approve: false
+    required_approvers:
+      - legal_counsel
+  HIGH:
+    auto_approve: false
+    required_approvers:
+      - legal_counsel
+      - vp_engineering
+  CRITICAL:
+    auto_approve: false
+    required_approvers:
+      - legal_counsel
+      - vp_engineering
+      - cfo
+      - cto
+
+escalation_rules:
+  - condition: annual_value_exceeds_500k
+    action: add_approver
+    approver: cfo
+  - condition: involves_pii
+    action: add_approver
+    approver: data_protection_officer
+  - condition: cross_border_data_transfer
+    action: add_approver
+    approver: compliance_officer

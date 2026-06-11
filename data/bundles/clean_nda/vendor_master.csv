@@ -1,0 +1,3 @@
+vendor_id,vendor_name,contact_email,country,risk_tier,active,annual_spend_usd
+V-1001,Acme Corporation,contracts@acme.example.com,USA,low,true,250000
+V-1002,Globex Industries,legal@globex.example.com,USA,medium,true,175000

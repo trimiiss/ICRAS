@@ -1,0 +1,8 @@
+# Clean NDA Bundle Manifest
+bundle_name: clean_nda
+contract_file: contract.pdf
+contract_type: Non-Disclosure Agreement
+counterparty: Acme Corporation
+jurisdiction: Delaware, USA
+effective_date: "2025-01-15"
+description: Standard mutual NDA with Acme Corporation for Project Alpha.

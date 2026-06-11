@@ -1,0 +1,26 @@
+# Services Agreement Jurisdiction Rules — New York, USA
+jurisdiction: New York, USA
+
+governing_law:
+  state: New York
+  country: USA
+
+regulatory_requirements:
+  - requirement: data_breach_notification
+    description: Must comply with NY SHIELD Act breach notification requirements.
+    severity_if_missing: HIGH
+
+  - requirement: data_security_safeguards
+    description: Must implement reasonable data security safeguards per NY SHIELD Act.
+    severity_if_missing: HIGH
+
+  - requirement: consumer_data_rights
+    description: Must address consumer data rights if processing NY resident data.
+    severity_if_missing: MEDIUM
+
+statute_of_limitations_years: 6
+
+enforceability_notes:
+  - New York courts generally enforce limitation of liability clauses.
+  - Choice of law and forum selection clauses are broadly enforceable.
+  - Non-solicitation clauses are subject to reasonableness review.

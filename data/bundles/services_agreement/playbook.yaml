@@ -1,0 +1,42 @@
+# Services Agreement Playbook
+contract_type: Master Services Agreement
+
+required_clauses:
+  - clause_type: scope_of_services
+    description: Must clearly define the services to be provided.
+    severity_if_missing: CRITICAL
+
+  - clause_type: payment_terms
+    description: Must specify payment schedule, rates, and currency.
+    severity_if_missing: HIGH
+
+  - clause_type: service_level_agreement
+    description: Must include SLAs with measurable targets and remedies.
+    severity_if_missing: HIGH
+
+  - clause_type: limitation_of_liability
+    description: Must cap liability and specify exclusions.
+    severity_if_missing: HIGH
+
+  - clause_type: termination
+    description: Must define termination rights and notice periods.
+    severity_if_missing: MEDIUM
+
+  - clause_type: intellectual_property
+    description: Must address IP ownership for work product.
+    severity_if_missing: HIGH
+
+  - clause_type: data_protection
+    description: Must include data processing obligations and GDPR references if applicable.
+    severity_if_missing: CRITICAL
+
+prohibited_clauses:
+  - clause_type: unlimited_liability
+    description: Vendor should not accept unlimited liability.
+    severity_if_present: CRITICAL
+
+  - clause_type: auto_renewal_without_notice
+    description: Contract should not auto-renew without advance notice.
+    severity_if_present: MEDIUM
+
+max_contract_term_years: 5
