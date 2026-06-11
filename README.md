@@ -127,13 +127,3 @@ pytest -v
 | **Schema** | A Pydantic v2 model that validates structured data between agents |
 | **Agent** | A specialized module that performs one step of the review pipeline |
 
----
-
-## What's Next
-
-Agent intelligence (LLM-powered analysis) will be added in future sprints. The current foundation provides:
-
-- Validated data schemas for all inter-agent communication
-- Deterministic, auditable run folders
-- Bundle loading with clear error reporting
-- A test suite that verifies the entire foundation
