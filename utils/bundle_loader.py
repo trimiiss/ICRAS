@@ -10,7 +10,6 @@ A valid bundle folder must contain:
 """
 
 import csv
-import io
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -90,7 +89,7 @@ def load_bundle(bundle_path: str | Path) -> Dict[str, Any]:
     missing_fields = [f for f in REQUIRED_MANIFEST_FIELDS if f not in manifest]
     if missing_fields:
         raise BundleLoadError(
-            f"manifest.yaml is missing required fields: "
+            "manifest.yaml is missing required fields: "
             + ", ".join(missing_fields)
         )
 

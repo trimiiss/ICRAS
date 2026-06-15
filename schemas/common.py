@@ -22,9 +22,15 @@ ConfidenceScore = Annotated[float, Field(ge=0.0, le=1.0)]
 class EvidencePointer(BaseModel):
     """Points to a specific location in a source document that supports a finding."""
 
-    source_file: str = Field(
-        ..., description="Name or path of the source file."
+    evidence_id: Optional[str] = Field(
+        default=None,
+        description="Evidence record ID from evidence_index.json, if available.",
     )
+    document_id: Optional[str] = Field(
+        default=None,
+        description="Document inventory ID from document_inventory.json, if available.",
+    )
+    source_file: str = Field(..., description="Name or path of the source file.")
     page_number: Optional[int] = Field(
         default=None, description="Page number in the document (1-indexed)."
     )
