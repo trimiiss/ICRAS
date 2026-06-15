@@ -75,8 +75,7 @@ def create_run_folder(
     # Defensive: never overwrite an existing run folder
     if run_dir.exists():
         raise FileExistsError(
-            f"Run folder already exists (UUID collision): {run_dir}. "
-            "Please try again."
+            f"Run folder already exists (UUID collision): {run_dir}. Please try again."
         )
 
     run_dir.mkdir(parents=True)
@@ -108,6 +107,69 @@ def create_run_folder(
         "run_dir": str(run_dir.resolve()),
         "metadata": metadata,
     }
+
+
+def append_audit_event(run_dir: str | Path, event: Dict[str, Any]) -> None:
+    """Append a timestamped audit event to ``audit_log.jsonl``.
+
+    Args:
+        run_dir: Directory for the current pipeline run.
+        event: JSON-serializable event details to append.
+
+    Raises:
+        FileNotFoundError: If the run directory does not exist.
+    """
+    run_path = Path(run_dir)
+    if not run_path.is_dir():
+        raise FileNotFoundError(
+            f"Run directory does not exist: {run_path}. "
+            "Create it with create_run_folder before writing audit events."
+        )
+
+    event_with_time: Dict[str, Any] = {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        **event,
+    }
+    with open(run_path / "audit_log.jsonl", "a", encoding="utf-8") as f:
+        json.dump(event_with_time, f, ensure_ascii=False)
+        f.write("\n")
+
+
+def update_run_status(
+    run_dir: str | Path,
+    status: str,
+    error_message: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Update the status in a run folder's ``metadata.json``.
+
+    Args:
+        run_dir: Directory for the current pipeline run.
+        status: New run status, such as ``initialized`` or ``failed``.
+        error_message: Optional error message to persist for failed runs.
+
+    Returns:
+        The updated metadata dictionary.
+
+    Raises:
+        FileNotFoundError: If ``metadata.json`` does not exist.
+    """
+    metadata_path = Path(run_dir) / "metadata.json"
+    if not metadata_path.is_file():
+        raise FileNotFoundError(
+            f"Run metadata file does not exist: {metadata_path}. "
+            "Create the run folder before updating status."
+        )
+
+    with open(metadata_path, "r", encoding="utf-8") as f:
+        metadata: Dict[str, Any] = json.load(f)
+
+    metadata["status"] = status
+    metadata["updated_at"] = datetime.now(timezone.utc).isoformat()
+    if error_message is not None:
+        metadata["error_message"] = error_message
+
+    _write_json(metadata_path, metadata)
+    return metadata
 
 
 def _default_config(bundle_path: str) -> Dict[str, Any]:
