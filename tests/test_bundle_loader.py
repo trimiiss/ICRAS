@@ -8,7 +8,6 @@ Covers:
     - Supporting YAML files are parsed.
 """
 
-import os
 import shutil
 import tempfile
 from pathlib import Path
@@ -86,7 +85,9 @@ class TestLoadInvalidBundle:
             manifest_path = Path(tmpdir) / "manifest.yaml"
             manifest_path.write_text("bundle_name: test\n")
 
-            with pytest.raises(BundleLoadError, match="missing required files") as exc_info:
+            with pytest.raises(
+                BundleLoadError, match="missing required files"
+            ) as exc_info:
                 load_bundle(tmpdir)
 
             error_msg = str(exc_info.value)

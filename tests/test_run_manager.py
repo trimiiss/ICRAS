@@ -13,9 +13,13 @@ import json
 import tempfile
 from pathlib import Path
 
-import pytest
 
-from utils.run_manager import create_run_folder, create_run_id
+from utils.run_manager import (
+    append_audit_event,
+    create_run_folder,
+    create_run_id,
+    update_run_status,
+)
 
 
 # Path to a sample bundle for testing.
@@ -134,7 +138,11 @@ class TestCreateRunFolder:
             generated_files = list(run_dir.iterdir())
             generated_names = {f.name for f in generated_files}
 
-            assert generated_names == {"metadata.json", "config.json", "audit_log.jsonl"}
+            assert generated_names == {
+                "metadata.json",
+                "config.json",
+                "audit_log.jsonl",
+            }
 
             # Verify nothing was written outside the run folder
             all_run_dirs = list(runs_dir.iterdir())
@@ -168,3 +176,51 @@ class TestCreateRunFolder:
             metadata = result["metadata"]
             # ISO 8601 UTC timestamps contain 'T' and end with timezone info
             assert "T" in metadata["created_at"]
+
+
+class TestRunAuditAndStatus:
+    def test_append_audit_event_writes_jsonl_event(self):
+        """Audit events should be appended as timestamped JSON lines."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            runs_dir = Path(tmpdir) / "runs"
+            result = create_run_folder(
+                bundle_path=str(NDA_BUNDLE),
+                runs_dir=runs_dir,
+            )
+
+            append_audit_event(
+                result["run_dir"],
+                {
+                    "event": "test_event",
+                    "agent": "test_agent",
+                    "message": "A test audit event was written.",
+                },
+            )
+
+            audit_path = Path(result["run_dir"]) / "audit_log.jsonl"
+            audit_event = json.loads(audit_path.read_text().strip())
+            assert audit_event["event"] == "test_event"
+            assert audit_event["agent"] == "test_agent"
+            assert "timestamp" in audit_event
+
+    def test_update_run_status_persists_failure_metadata(self):
+        """Run status updates should be persisted to metadata.json."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            runs_dir = Path(tmpdir) / "runs"
+            result = create_run_folder(
+                bundle_path=str(NDA_BUNDLE),
+                runs_dir=runs_dir,
+            )
+
+            metadata = update_run_status(
+                result["run_dir"],
+                "failed",
+                "Bundle validation failed.",
+            )
+
+            metadata_path = Path(result["run_dir"]) / "metadata.json"
+            saved_metadata = json.loads(metadata_path.read_text())
+            assert metadata["status"] == "failed"
+            assert saved_metadata["status"] == "failed"
+            assert saved_metadata["error_message"] == "Bundle validation failed."
+            assert "updated_at" in saved_metadata
