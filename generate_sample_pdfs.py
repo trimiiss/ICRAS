@@ -1,20 +1,20 @@
 """Generate minimal valid PDF files for sample bundles.
 
 These are real PDFs (valid PDF 1.0 structure) containing a single page
-with a short text label. No external PDF library needed.
+with deterministic clause text. No external PDF library needed.
 """
 
 from pathlib import Path
 
 
-def make_minimal_pdf(title: str) -> bytes:
-    """Build a minimal but valid PDF file with a single page and title text.
+def make_minimal_pdf(lines: list[str]) -> bytes:
+    """Build a minimal but valid PDF file with a single page and text lines.
 
     The PDF follows the PDF 1.0 specification with the minimum required
     objects: catalog, pages, page, font, and a content stream.
 
     Args:
-        title: Text to display on the single page.
+        lines: Text lines to display on the single page.
 
     Returns:
         The complete PDF file as bytes.
@@ -26,7 +26,11 @@ def make_minimal_pdf(title: str) -> bytes:
     # Object 4: Font (Helvetica)
     # Object 5: Content stream
 
-    content_stream = f"BT /F1 16 Tf 72 720 Td ({title}) Tj ET"
+    text_commands = ["BT /F1 10 Tf 72 720 Td 14 TL"]
+    for line in lines:
+        text_commands.append(f"({_escape_pdf_text(line)}) Tj T*")
+    text_commands.append("ET")
+    content_stream = "\n".join(text_commands)
     content_bytes = content_stream.encode("latin-1")
     stream_length = len(content_bytes)
 
@@ -92,19 +96,58 @@ def make_minimal_pdf(title: str) -> bytes:
     return header + body + xref.encode("latin-1") + trailer.encode("latin-1")
 
 
+def _escape_pdf_text(text: str) -> str:
+    """Escape characters that are special in PDF text literals."""
+    return text.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
+
+
 def main() -> None:
     """Generate PDF files for both sample bundles."""
     base = Path(__file__).resolve().parent
 
     bundles = {
-        "clean_nda": "Mutual Non-Disclosure Agreement - Acme Corporation",
-        "services_agreement": "Master Services Agreement - TechServe Solutions Ltd.",
+        "clean_nda": [
+            "Mutual Non-Disclosure Agreement - Acme Corporation",
+            "1 Parties",
+            "This Agreement is between Genpact LLC and Acme Corporation.",
+            "2 Effective Date",
+            "The effective date is January 15, 2025.",
+            "3 Confidentiality",
+            "Each party shall protect Confidential Information and use it only for Project Alpha.",
+            "4 Termination",
+            "Either party may terminate this Agreement with 30 days written notice.",
+            "5 Payment Terms",
+            "No fees are due under this NDA, and any approved invoices are payable net 30.",
+            "6 Liability Cap",
+            "Each party's aggregate liability is capped at 100000 USD.",
+            "7 Indemnity",
+            "Each party shall indemnify the other for third-party claims caused by breach.",
+            "8 Governing Law",
+            "This Agreement is governed by the laws of Delaware, USA.",
+            "9 Auto-Renewal",
+            "This Agreement does not auto-renew after expiration.",
+            "10 Data Protection",
+            "Each party shall comply with applicable data protection and privacy laws.",
+        ],
+        "services_agreement": [
+            "Master Services Agreement - TechServe Solutions Ltd.",
+            "1 Parties",
+            "This Agreement is between Genpact LLC and TechServe Solutions Ltd.",
+            "2 Effective Date",
+            "The effective date is February 1, 2025.",
+            "3 Payment Terms",
+            "Invoices are payable net 45 after receipt of a valid invoice.",
+            "4 Termination",
+            "Either party may terminate for material breach after a 30 day cure period.",
+            "5 Governing Law",
+            "This Agreement is governed by the laws of New York, USA.",
+        ],
     }
 
-    for bundle_name, title in bundles.items():
+    for bundle_name, lines in bundles.items():
         pdf_path = base / "data" / "bundles" / bundle_name / "contract.pdf"
         pdf_path.parent.mkdir(parents=True, exist_ok=True)
-        pdf_bytes = make_minimal_pdf(title)
+        pdf_bytes = make_minimal_pdf(lines)
         pdf_path.write_bytes(pdf_bytes)
         print(f"Created {pdf_path} ({len(pdf_bytes)} bytes)")
 

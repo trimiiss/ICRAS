@@ -12,9 +12,21 @@ endobj
 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
 endobj
 5 0 obj
-<< /Length 83 >>
+<< /Length 546 >>
 stream
-BT /F1 16 Tf 72 720 Td (Master Services Agreement - TechServe Solutions Ltd.) Tj ET
+BT /F1 10 Tf 72 720 Td 14 TL
+(Master Services Agreement - TechServe Solutions Ltd.) Tj T*
+(1 Parties) Tj T*
+(This Agreement is between Genpact LLC and TechServe Solutions Ltd.) Tj T*
+(2 Effective Date) Tj T*
+(The effective date is February 1, 2025.) Tj T*
+(3 Payment Terms) Tj T*
+(Invoices are payable net 45 after receipt of a valid invoice.) Tj T*
+(4 Termination) Tj T*
+(Either party may terminate for material breach after a 30 day cure period.) Tj T*
+(5 Governing Law) Tj T*
+(This Agreement is governed by the laws of New York, USA.) Tj T*
+ET
 endstream
 endobj
 xref
@@ -28,5 +40,5 @@ xref
 trailer
 << /Size 6 /Root 1 0 R >>
 startxref
-444
+908
 %%EOF

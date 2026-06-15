@@ -12,9 +12,31 @@ endobj
 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
 endobj
 5 0 obj
-<< /Length 81 >>
+<< /Length 1057 >>
 stream
-BT /F1 16 Tf 72 720 Td (Mutual Non-Disclosure Agreement - Acme Corporation) Tj ET
+BT /F1 10 Tf 72 720 Td 14 TL
+(Mutual Non-Disclosure Agreement - Acme Corporation) Tj T*
+(1 Parties) Tj T*
+(This Agreement is between Genpact LLC and Acme Corporation.) Tj T*
+(2 Effective Date) Tj T*
+(The effective date is January 15, 2025.) Tj T*
+(3 Confidentiality) Tj T*
+(Each party shall protect Confidential Information and use it only for Project Alpha.) Tj T*
+(4 Termination) Tj T*
+(Either party may terminate this Agreement with 30 days written notice.) Tj T*
+(5 Payment Terms) Tj T*
+(No fees are due under this NDA, and any approved invoices are payable net 30.) Tj T*
+(6 Liability Cap) Tj T*
+(Each party's aggregate liability is capped at 100000 USD.) Tj T*
+(7 Indemnity) Tj T*
+(Each party shall indemnify the other for third-party claims caused by breach.) Tj T*
+(8 Governing Law) Tj T*
+(This Agreement is governed by the laws of Delaware, USA.) Tj T*
+(9 Auto-Renewal) Tj T*
+(This Agreement does not auto-renew after expiration.) Tj T*
+(10 Data Protection) Tj T*
+(Each party shall comply with applicable data protection and privacy laws.) Tj T*
+ET
 endstream
 endobj
 xref
@@ -28,5 +50,5 @@ xref
 trailer
 << /Size 6 /Root 1 0 R >>
 startxref
-442
+1420
 %%EOF

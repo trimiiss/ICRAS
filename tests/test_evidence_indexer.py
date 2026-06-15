@@ -4,7 +4,7 @@ import json
 import shutil
 from pathlib import Path
 
-import fitz
+import pymupdf
 import pytest
 
 from agents.intake_agent import run_intake
@@ -95,7 +95,7 @@ class TestBuildEvidenceIndex:
         bundle_copy = tmp_path / "blank_contract_bundle"
         shutil.copytree(NDA_BUNDLE, bundle_copy)
 
-        blank_pdf = fitz.open()
+        blank_pdf = pymupdf.open()
         blank_pdf.new_page()
         blank_pdf.save(bundle_copy / "contract.pdf")
         blank_pdf.close()

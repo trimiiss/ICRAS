@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 from typing import Any, Dict, Mapping
 
-import fitz
+import pymupdf
 
 from schemas.evidence_index import EvidenceIndex, EvidenceRecord, EvidenceWarning
 from utils.run_manager import append_audit_event
@@ -139,7 +139,7 @@ def _extract_page_records(
     warnings: list[EvidenceWarning] = []
 
     try:
-        pdf = fitz.open(contract_path)
+        pdf = pymupdf.open(contract_path)
     except Exception as exc:
         raise EvidenceIndexError(
             f"Failed to open primary contract PDF '{contract_path.name}': {exc}"
