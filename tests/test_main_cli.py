@@ -11,6 +11,38 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 NDA_BUNDLE = PROJECT_ROOT / "data" / "bundles" / "clean_nda"
 
 
+def test_valid_bundle_creates_intake_and_evidence_artifacts(tmp_path: Path) -> None:
+    """A valid CLI run should create Phase 3 intake and evidence artifacts."""
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(PROJECT_ROOT / "main.py"),
+            "--bundle",
+            str(NDA_BUNDLE),
+        ],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0
+    assert "evidence_index.json" in result.stdout
+
+    run_dirs = list((tmp_path / "runs").iterdir())
+    assert len(run_dirs) == 1
+    run_dir = run_dirs[0]
+
+    assert (run_dir / "context_packet.json").is_file()
+    assert (run_dir / "document_inventory.json").is_file()
+    assert (run_dir / "evidence_index.json").is_file()
+
+    evidence_index = json.loads(
+        (run_dir / "evidence_index.json").read_text(encoding="utf-8")
+    )
+    assert evidence_index["records"][0]["evidence_id"] == "EV-001"
+
+
 def test_invalid_bundle_creates_failed_run_with_audit_log(tmp_path: Path) -> None:
     """Bundle validation failures should be traceable in a run audit log."""
     invalid_bundle = tmp_path / "invalid_bundle"

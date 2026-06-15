@@ -4,7 +4,6 @@ These are real PDFs (valid PDF 1.0 structure) containing a single page
 with a short text label. No external PDF library needed.
 """
 
-import sys
 from pathlib import Path
 
 

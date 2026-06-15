@@ -12,11 +12,12 @@ import sys
 
 from agents.intake_agent import IntakeAgentError, run_intake
 from utils.bundle_loader import BundleLoadError, load_bundle
+from utils.evidence_indexer import EvidenceIndexError, build_evidence_index
 from utils.run_manager import append_audit_event, create_run_folder, update_run_status
 
 
 def main() -> int:
-    """Parse CLI arguments, validate the bundle, and create a run folder.
+    """Parse CLI arguments, validate the bundle, and create run artifacts.
 
     Returns:
         0 on success, 1 on failure.
@@ -85,6 +86,30 @@ def main() -> int:
         print(f"  Run Dir : {run_info['run_dir']}", file=sys.stderr)
         return 1
 
+    # --- Step 4: Build page-level evidence index for extraction ---
+    try:
+        evidence_result = build_evidence_index(
+            bundle_data=bundle_data,
+            document_inventory=intake_result["document_inventory"],
+            run_id=run_info["run_id"],
+            run_dir=run_info["run_dir"],
+        )
+    except EvidenceIndexError as exc:
+        error_message = str(exc)
+        append_audit_event(
+            run_info["run_dir"],
+            {
+                "event": "evidence_index_failed",
+                "agent": "evidence_indexer",
+                "message": "Evidence indexing failed before extraction could start.",
+                "error": error_message,
+            },
+        )
+        update_run_status(run_info["run_dir"], "failed", error_message)
+        print(f"ERROR: Evidence indexing failed.\n  {exc}", file=sys.stderr)
+        print(f"  Run Dir : {run_info['run_dir']}", file=sys.stderr)
+        return 1
+
     print("\nRun created successfully.")
     print(f"  Run ID  : {run_info['run_id']}")
     print(f"  Run Dir : {run_info['run_dir']}")
@@ -92,6 +117,7 @@ def main() -> int:
     print("  Intake artifacts:")
     print(f"    - {intake_result['artifact_paths']['context_packet']}")
     print(f"    - {intake_result['artifact_paths']['document_inventory']}")
+    print(f"    - {evidence_result['artifact_paths']['evidence_index']}")
 
     return 0
 
