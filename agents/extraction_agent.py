@@ -93,6 +93,9 @@ SCHEDULE_PATTERN = re.compile(
 )
 PAGE_NUMBER_PATTERN = re.compile(r"^\s*(?:page\s+)?\d+(?:\s+of\s+\d+)?\s*$", re.I)
 LOW_CONFIDENCE_THRESHOLD = 0.75
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+FALLBACK_FIXTURE_DIR = PROJECT_ROOT / "data" / "extraction_fallbacks"
+MIN_REQUIRED_CLAUSE_COVERAGE = 0.8
 
 
 def run_extraction(
@@ -128,23 +131,76 @@ def run_extraction(
         )
 
     page_texts = _extract_page_texts(contract_path)
-    if not page_texts:
-        raise ExtractionAgentError(
-            f"No extractable text found in primary contract PDF: {contract_path.name}. "
-            "Use a born-digital PDF for US-07 or add fallback data in US-08."
+    warnings: list[ExtractionWarning] = []
+    if page_texts:
+        candidates = _split_into_candidates(page_texts)
+        clauses, extraction_warnings = _extract_required_clauses(
+            candidates=candidates,
+            evidence_index=evidence_index,
+            primary_document=primary_document,
         )
+        warnings.extend(extraction_warnings)
+    else:
+        clauses = []
+        warnings.append(
+            ExtractionWarning(
+                warning_id="WARN-001",
+                message=(
+                    f"No extractable text found in primary contract PDF: "
+                    f"{contract_path.name}."
+                ),
+            )
+        )
+    fallback_reason = _fallback_reason(clauses)
+    fallback_assisted = fallback_reason is not None
+    fallback_fixture_path: Path | None = None
 
-    candidates = _split_into_candidates(page_texts)
-    clauses, warnings = _extract_required_clauses(
-        candidates=candidates,
-        evidence_index=evidence_index,
-        primary_document=primary_document,
-    )
+    if fallback_reason is not None:
+        fallback_fixture_path = _find_fallback_fixture(bundle_data)
+        if fallback_fixture_path is not None:
+            clauses = _load_fallback_clauses(
+                fixture_path=fallback_fixture_path,
+                evidence_index=evidence_index,
+                primary_document=primary_document,
+            )
+            warnings.append(
+                ExtractionWarning(
+                    warning_id=f"WARN-{len(warnings) + 1:03d}",
+                    message=(
+                        "Synthetic extraction fallback was used because "
+                        f"{fallback_reason}"
+                    ),
+                )
+            )
+            append_audit_event(
+                run_path,
+                {
+                    "event": "extraction_fallback_used",
+                    "agent": "extraction_agent",
+                    "message": "Synthetic extraction fallback was used.",
+                    "reason": fallback_reason,
+                    "fixture": str(fallback_fixture_path),
+                },
+            )
+        else:
+            warnings.append(
+                ExtractionWarning(
+                    warning_id=f"WARN-{len(warnings) + 1:03d}",
+                    message=(
+                        "Extraction quality was low, but no matching synthetic "
+                        "fallback fixture was available."
+                    ),
+                )
+            )
+            fallback_assisted = False
+            fallback_reason = None
 
     extracted_contract = ExtractedContract(
         run_id=run_id,
         document_id=str(primary_document["document_id"]),
         source_file=str(primary_document["relative_path"]),
+        fallback_assisted=fallback_assisted,
+        fallback_reason=fallback_reason,
         clauses=clauses,
         warnings=warnings,
     )
@@ -163,6 +219,8 @@ def run_extraction(
             "clause_count": len(extracted_contract.clauses),
             "warning_count": len(extracted_contract.warnings),
             "low_confidence_count": low_confidence_count,
+            "fallback_assisted": fallback_assisted,
+            "fallback_reason": fallback_reason,
         },
     )
 
@@ -586,6 +644,171 @@ def _extract_required_clauses(
             )
 
     return clauses, warnings
+
+
+def _fallback_reason(clauses: list[ExtractedClause]) -> str | None:
+    """Return a reason to use fallback data when extraction quality is too low."""
+    if not clauses:
+        return "no required clauses were extracted."
+
+    coverage = len({clause.clause_type for clause in clauses}) / len(CLAUSE_KEYWORDS)
+    if coverage < MIN_REQUIRED_CLAUSE_COVERAGE:
+        return (
+            f"required clause coverage {coverage:.0%} is below "
+            f"{MIN_REQUIRED_CLAUSE_COVERAGE:.0%}."
+        )
+
+    average_confidence = sum(clause.confidence for clause in clauses) / len(clauses)
+    if average_confidence < LOW_CONFIDENCE_THRESHOLD:
+        return (
+            f"average confidence {average_confidence:.2f} is below "
+            f"{LOW_CONFIDENCE_THRESHOLD:.2f}."
+        )
+
+    low_confidence_count = sum(1 for clause in clauses if clause.manual_review_required)
+    if low_confidence_count > len(clauses) / 2:
+        return (
+            f"{low_confidence_count} of {len(clauses)} extracted clauses require "
+            "manual review."
+        )
+
+    return None
+
+
+def _find_fallback_fixture(bundle_data: Mapping[str, Any]) -> Path | None:
+    """Find the best matching synthetic fallback fixture for a bundle."""
+    manifest = bundle_data.get("manifest")
+    if not isinstance(manifest, Mapping):
+        return None
+
+    candidate_names = [
+        _fixture_key(manifest.get("bundle_name")),
+        _fixture_key(manifest.get("contract_type")),
+    ]
+
+    for name in candidate_names:
+        if name is None:
+            continue
+        fixture_path = FALLBACK_FIXTURE_DIR / f"{name}.json"
+        if fixture_path.is_file():
+            return fixture_path
+
+    return None
+
+
+def _fixture_key(value: Any) -> str | None:
+    """Normalize a manifest field into a fallback fixture file stem."""
+    if not isinstance(value, str):
+        return None
+
+    key = re.sub(r"[^a-z0-9]+", "_", value.casefold()).strip("_")
+    return key or None
+
+
+def _load_fallback_clauses(
+    fixture_path: Path,
+    evidence_index: Mapping[str, Any],
+    primary_document: Mapping[str, Any],
+) -> list[ExtractedClause]:
+    """Load fallback clauses from a fixture and validate them as ExtractedClause."""
+    try:
+        with open(fixture_path, "r", encoding="utf-8") as file:
+            fixture = json.load(file)
+    except Exception as exc:
+        raise ExtractionAgentError(
+            f"Failed to load fallback fixture '{fixture_path}': {exc}"
+        ) from exc
+
+    raw_clauses = fixture.get("clauses") if isinstance(fixture, Mapping) else None
+    if not isinstance(raw_clauses, list) or not raw_clauses:
+        raise ExtractionAgentError(
+            f"Fallback fixture '{fixture_path}' must contain a non-empty clauses list."
+        )
+
+    fallback_clauses: list[ExtractedClause] = []
+    for raw_clause in raw_clauses:
+        if not isinstance(raw_clause, Mapping):
+            raise ExtractionAgentError(
+                f"Fallback fixture '{fixture_path}' contains a non-object clause."
+            )
+
+        clause = _fallback_clause_from_mapping(
+            raw_clause=raw_clause,
+            clause_id=f"CL-{len(fallback_clauses) + 1:03d}",
+            evidence_index=evidence_index,
+            primary_document=primary_document,
+        )
+        fallback_clauses.append(clause)
+
+    return fallback_clauses
+
+
+def _fallback_clause_from_mapping(
+    raw_clause: Mapping[str, Any],
+    clause_id: str,
+    evidence_index: Mapping[str, Any],
+    primary_document: Mapping[str, Any],
+) -> ExtractedClause:
+    """Convert one fallback fixture clause into the extraction output schema."""
+    clause_type = _required_fixture_str(raw_clause, "clause_type")
+    title = _required_fixture_str(raw_clause, "title")
+    text = _required_fixture_str(raw_clause, "text")
+    section_reference = raw_clause.get("section_reference")
+    if section_reference is not None and not isinstance(section_reference, str):
+        raise ExtractionAgentError("Fallback clause section_reference must be a string.")
+
+    raw_confidence = raw_clause.get("confidence", 0.85)
+    if not isinstance(raw_confidence, (int, float)):
+        raise ExtractionAgentError("Fallback clause confidence must be numeric.")
+    confidence = float(raw_confidence)
+    page_number = 1
+    source_file = str(primary_document["relative_path"])
+    document_id = str(primary_document["document_id"])
+    evidence_id = _evidence_id_for_page(evidence_index, page_number)
+    excerpt = _make_excerpt(text)
+    evidence = EvidencePointer(
+        evidence_id=evidence_id,
+        document_id=document_id,
+        source_file=source_file,
+        page_number=page_number,
+        clause_reference=section_reference,
+        excerpt=excerpt,
+    )
+    evidence_span = ClauseEvidenceSpan(
+        page_number=page_number,
+        evidence_id=evidence_id,
+        document_id=document_id,
+        source_file=source_file,
+        excerpt=excerpt,
+    )
+    manual_review_required = confidence < LOW_CONFIDENCE_THRESHOLD
+
+    return ExtractedClause(
+        clause_id=clause_id,
+        clause_type=clause_type,
+        title=title,
+        text=text,
+        clause_text=text,
+        page_number=page_number,
+        page_numbers=[page_number],
+        section_reference=section_reference,
+        confidence=confidence,
+        confidence_score=confidence,
+        evidence=evidence,
+        evidence_pointer=evidence,
+        evidence_spans=[evidence_span],
+        manual_review_required=manual_review_required,
+        bbox=None,
+        bounding_box_coordinates=None,
+    )
+
+
+def _required_fixture_str(raw_clause: Mapping[str, Any], key: str) -> str:
+    """Read a required string from a fallback fixture clause."""
+    value = raw_clause.get(key)
+    if not isinstance(value, str) or not value.strip():
+        raise ExtractionAgentError(f"Fallback clause field '{key}' must be a string.")
+    return value.strip()
 
 
 def _best_candidate_for_type(

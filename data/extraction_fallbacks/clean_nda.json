@@ -1,0 +1,76 @@
+{
+  "bundle_name": "clean_nda",
+  "contract_type": "Non-Disclosure Agreement",
+  "clauses": [
+    {
+      "clause_type": "parties",
+      "title": "Parties",
+      "text": "This Agreement is between Genpact LLC and Acme Corporation.",
+      "section_reference": "1",
+      "confidence": 0.9
+    },
+    {
+      "clause_type": "effective_date",
+      "title": "Effective Date",
+      "text": "The effective date is January 15, 2025.",
+      "section_reference": "2",
+      "confidence": 0.9
+    },
+    {
+      "clause_type": "termination",
+      "title": "Termination",
+      "text": "Either party may terminate this Agreement with 30 days written notice.",
+      "section_reference": "4",
+      "confidence": 0.88
+    },
+    {
+      "clause_type": "payment_terms",
+      "title": "Payment Terms",
+      "text": "No fees are due under this NDA, and any approved invoices are payable net 30.",
+      "section_reference": "5",
+      "confidence": 0.88
+    },
+    {
+      "clause_type": "liability_cap",
+      "title": "Liability Cap",
+      "text": "Each party's aggregate liability is capped at 100000 USD.",
+      "section_reference": "6",
+      "confidence": 0.86
+    },
+    {
+      "clause_type": "indemnity",
+      "title": "Indemnity",
+      "text": "Each party shall indemnify the other for third-party claims caused by breach.",
+      "section_reference": "7",
+      "confidence": 0.86
+    },
+    {
+      "clause_type": "governing_law",
+      "title": "Governing Law",
+      "text": "This Agreement is governed by the laws of Delaware, USA.",
+      "section_reference": "8",
+      "confidence": 0.9
+    },
+    {
+      "clause_type": "auto_renewal",
+      "title": "Auto-Renewal",
+      "text": "This Agreement does not auto-renew after expiration.",
+      "section_reference": "9",
+      "confidence": 0.86
+    },
+    {
+      "clause_type": "data_protection",
+      "title": "Data Protection",
+      "text": "Each party shall comply with applicable data protection and privacy laws.",
+      "section_reference": "10",
+      "confidence": 0.86
+    },
+    {
+      "clause_type": "confidentiality",
+      "title": "Confidentiality",
+      "text": "Each party shall protect Confidential Information and use it only for Project Alpha.",
+      "section_reference": "3",
+      "confidence": 0.9
+    }
+  ]
+}
