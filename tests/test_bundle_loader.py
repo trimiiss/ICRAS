@@ -63,6 +63,13 @@ class TestLoadValidBundle:
         policy = result["approval_policy"]
         assert isinstance(policy, dict)
         assert "approval_thresholds" in policy
+        assert policy["approved_payment_terms"]["terms"] == ["net-30"]
+        assert policy["manual_review_confidence_threshold"] == 0.75
+        assert "signing_authority_thresholds" in policy
+        assert "liability_cap_requirements" in policy
+        assert "auto_renewal_rules" in policy
+        assert "high_risk_jurisdictions" in policy
+        assert "gdpr_requirements" in policy
 
     def test_jurisdiction_rules_loaded(self):
         result = load_bundle(NDA_BUNDLE)
@@ -110,3 +117,35 @@ class TestLoadInvalidBundle:
         """Passing a file path instead of a directory should fail."""
         with pytest.raises(BundleLoadError, match="not a directory"):
             load_bundle(NDA_BUNDLE / "manifest.yaml")
+
+    def test_invalid_approval_policy_yaml_raises_clear_error(self):
+        """Malformed approval_policy.yaml should identify the bad file."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            dest = Path(tmpdir) / "bad_policy_bundle"
+            shutil.copytree(NDA_BUNDLE, dest)
+            (dest / "approval_policy.yaml").write_text(
+                "approval_thresholds: [\n",
+                encoding="utf-8",
+            )
+
+            with pytest.raises(
+                BundleLoadError,
+                match="Failed to parse approval_policy.yaml",
+            ):
+                load_bundle(dest)
+
+    def test_invalid_approval_policy_rule_raises_clear_error(self):
+        """Invalid rule values should include the policy field path."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            dest = Path(tmpdir) / "invalid_policy_bundle"
+            shutil.copytree(NDA_BUNDLE, dest)
+            (dest / "approval_policy.yaml").write_text(
+                "manual_review_confidence_threshold: 1.5\n",
+                encoding="utf-8",
+            )
+
+            with pytest.raises(
+                BundleLoadError,
+                match="manual_review_confidence_threshold",
+            ):
+                load_bundle(dest)

@@ -14,6 +14,9 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 import yaml
+from pydantic import ValidationError
+
+from schemas.policy_rules import PolicyRules
 
 
 # Files that every bundle folder must contain.
@@ -103,7 +106,7 @@ def load_bundle(bundle_path: str | Path) -> Dict[str, Any]:
 
     # 5. Load supporting YAML files
     playbook = _load_yaml(bundle_dir / "playbook.yaml")
-    approval_policy = _load_yaml(bundle_dir / "approval_policy.yaml")
+    approval_policy = _load_approval_policy(bundle_dir / "approval_policy.yaml")
     jurisdiction_rules = _load_yaml(bundle_dir / "jurisdiction_rules.yaml")
 
     # 6. Load vendor_master.csv
@@ -145,6 +148,32 @@ def _load_yaml(filepath: Path) -> Dict[str, Any]:
         return data
     except yaml.YAMLError as exc:
         raise BundleLoadError(f"Failed to parse {filepath.name}: {exc}") from exc
+
+
+def _load_approval_policy(filepath: Path) -> Dict[str, Any]:
+    """Load and validate approval policy rules from YAML.
+
+    Args:
+        filepath: Absolute path to approval_policy.yaml.
+
+    Returns:
+        A JSON-compatible dictionary with defaults applied.
+
+    Raises:
+        BundleLoadError: If the YAML or policy rule values are invalid.
+    """
+    raw_policy = _load_yaml(filepath)
+    try:
+        return PolicyRules.model_validate(raw_policy).model_dump(mode="json")
+    except ValidationError as exc:
+        error_messages = []
+        for error in exc.errors():
+            location = ".".join(str(part) for part in error["loc"])
+            error_messages.append(f"{location}: {error['msg']}")
+        raise BundleLoadError(
+            f"{filepath.name} contains invalid policy rules: "
+            + "; ".join(error_messages)
+        ) from exc
 
 
 def _load_csv(filepath: Path) -> List[Dict[str, str]]:

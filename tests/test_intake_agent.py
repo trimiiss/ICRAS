@@ -49,6 +49,7 @@ class TestRunIntake:
         assert context["bundle_name"] == "clean_nda"
         assert context["contract_type"] == "Non-Disclosure Agreement"
         assert context["counterparty"] == "Acme Corporation"
+        assert context["effective_date"] == "2025-01-15"
         assert context["contract_file"] == "contract.pdf"
         assert "playbook" in context
         assert "approval_policy" in context

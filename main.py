@@ -12,6 +12,7 @@ import sys
 
 from agents.extraction_agent import ExtractionAgentError, run_extraction
 from agents.intake_agent import IntakeAgentError, run_intake
+from agents.validation_agent import ValidationAgentError, run_validation
 from utils.bundle_loader import BundleLoadError, load_bundle
 from utils.evidence_indexer import EvidenceIndexError, build_evidence_index
 from utils.run_manager import append_audit_event, create_run_folder, update_run_status
@@ -136,15 +137,40 @@ def main() -> int:
         print(f"  Run Dir : {run_info['run_dir']}", file=sys.stderr)
         return 1
 
+    # --- Step 6: Validate required contract fields deterministically ---
+    try:
+        validation_result = run_validation(
+            context=intake_result["context_packet"],
+            clauses=extraction_result["extracted_contract"]["clauses"],
+            run_dir=run_info["run_dir"],
+            evidence_index=evidence_result["evidence_index"],
+        )
+    except ValidationAgentError as exc:
+        error_message = str(exc)
+        append_audit_event(
+            run_info["run_dir"],
+            {
+                "event": "validation_failed",
+                "agent": "validation_agent",
+                "message": "Validation Agent failed before required artifacts were completed.",
+                "error": error_message,
+            },
+        )
+        update_run_status(run_info["run_dir"], "failed", error_message)
+        print(f"ERROR: Validation failed.\n  {exc}", file=sys.stderr)
+        print(f"  Run Dir : {run_info['run_dir']}", file=sys.stderr)
+        return 1
+
     print("\nRun created successfully.")
     print(f"  Run ID  : {run_info['run_id']}")
     print(f"  Run Dir : {run_info['run_dir']}")
     print(f"  Status  : {run_info['metadata']['status']}")
-    print("  Intake artifacts:")
+    print("  Run artifacts:")
     print(f"    - {intake_result['artifact_paths']['context_packet']}")
     print(f"    - {intake_result['artifact_paths']['document_inventory']}")
     print(f"    - {evidence_result['artifact_paths']['evidence_index']}")
     print(f"    - {extraction_result['artifact_paths']['extracted_contract']}")
+    print(f"    - {validation_result['artifact_paths']['validation_findings']}")
 
     return 0
 

@@ -21,6 +21,10 @@ class ContextPacket(BaseModel):
     jurisdiction: str = Field(
         ..., description="Governing jurisdiction (e.g. 'New York, USA')."
     )
+    effective_date: Optional[str] = Field(
+        default=None,
+        description="Raw effective date from the contract bundle, if provided.",
+    )
     contract_file: str = Field(..., description="Path to the contract PDF file.")
     playbook: Dict[str, Any] = Field(
         default_factory=dict,
