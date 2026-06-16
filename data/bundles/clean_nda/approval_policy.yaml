@@ -27,6 +27,93 @@ escalation_rules:
     action: add_approver
     approver: cfo
 
+exception_routing:
+  auto_approve:
+    category: AUTO_APPROVE
+    reason: Standard terms meet approval policy and no routed exceptions were detected.
+    next_action: No human approval required.
+  rules:
+    - name: missing_liability_cap
+      category: LEGAL
+      approver: legal_counsel
+      reason: Missing liability cap requires legal review.
+      next_action: Legal must approve the liability exposure or request a compliant cap.
+      match_issue_types:
+        - missing_liability_cap
+        - missing_field
+      match_field_names:
+        - liability_cap
+      match_text:
+        - liability cap
+    - name: net_90_payment_terms
+      category: FINANCE
+      approver: finance_manager
+      reason: Net-90 or unapproved payment terms require finance approval.
+      next_action: Finance must approve the payment terms or request revision to approved terms.
+      match_issue_types:
+        - payment_terms_policy_violation
+        - payment_terms_exceed_standard
+        - calculation_error
+      match_field_names:
+        - payment_terms
+    - name: high_risk_jurisdiction
+      category: COMPLIANCE
+      approver: compliance_officer
+      reason: High-risk jurisdiction requires compliance review.
+      next_action: Compliance must approve jurisdiction risk or request mitigation.
+      match_issue_types:
+        - high_risk_jurisdiction
+      match_field_names:
+        - governing_law
+    - name: low_extraction_confidence
+      category: MANUAL_REVIEW
+      approver: contract_reviewer
+      reason: Low extraction confidence requires manual source review.
+      next_action: Review the source evidence and confirm extracted fields before approval.
+      match_issue_types:
+        - low_confidence_signature
+      manual_review_required: true
+      max_confidence: 0.75
+    - name: conflicting_governing_law
+      category: LEGAL
+      approver: legal_counsel
+      reason: Conflicting governing law requires legal review.
+      next_action: Legal must resolve the governing-law conflict before approval.
+      match_issue_types:
+        - conflicting_governing_law
+        - multi_jurisdiction_conflict
+      match_field_names:
+        - governing_law
+    - name: missing_gdpr_clause
+      category: COMPLIANCE
+      approver: compliance_officer
+      reason: Missing GDPR or data protection clauses require compliance review.
+      next_action: Compliance must confirm required data protection terms or document why they do not apply.
+      match_issue_types:
+        - missing_gdpr_clause
+      match_field_names:
+        - data_protection
+    - name: counterparty_manual_review
+      category: MANUAL_REVIEW
+      approver: procurement_manager
+      reason: Counterparty identity requires manual review.
+      next_action: Procurement must confirm the counterparty identity before approval.
+      match_issue_types:
+        - counterparty_resolution_review
+      match_field_names:
+        - counterparty
+    - name: material_playbook_variance
+      category: LEGAL
+      approver: legal_counsel
+      reason: Material variance from the playbook requires legal review.
+      next_action: Legal must approve the variance or request clause remediation.
+      match_issue_types:
+        - material_variance_from_playbook
+        - non_standard_prohibited_clause
+        - suspicious_date_ordering
+        - missing_field
+        - invalid_field
+
 approved_payment_terms:
   terms:
     - net-30

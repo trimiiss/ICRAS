@@ -12,6 +12,7 @@ from pydantic import ValidationError
 
 from schemas.common import EvidencePointer, Severity
 from schemas.context_packet import ContextPacket
+from schemas.exception_triage import ExceptionCategory, ExceptionTriageItem
 from schemas.extracted_clause import ExtractedClause, ExtractedContract
 from schemas.finding import Finding
 from schemas.policy_rules import PolicyRules
@@ -215,6 +216,39 @@ class TestPolicyRules:
         assert policy.liability_cap_requirements.required is True
         assert policy.auto_renewal_rules.allowed is False
         assert policy.gdpr_requirements.applies_when_personal_data is True
+        assert policy.exception_routing.rules == []
+
+
+# ---------------------------------------------------------------------------
+# ExceptionTriageItem
+# ---------------------------------------------------------------------------
+
+class TestExceptionTriageItem:
+    def test_valid_exception_triage_item(self):
+        item = ExceptionTriageItem(
+            finding_id="F-001",
+            category=ExceptionCategory.LEGAL,
+            approver="legal_counsel",
+            reason="Missing liability cap requires legal review.",
+            next_action="Legal must approve the liability exposure.",
+            severity="HIGH",
+            evidence=[_valid_evidence()],
+            source_title="Missing liability cap",
+        )
+        assert item.category == ExceptionCategory.LEGAL
+        assert item.approver == "legal_counsel"
+
+    def test_non_auto_exception_requires_approver(self):
+        with pytest.raises(ValidationError, match="approver"):
+            ExceptionTriageItem(
+                finding_id="F-001",
+                category=ExceptionCategory.LEGAL,
+                reason="Missing liability cap requires legal review.",
+                next_action="Legal must approve the liability exposure.",
+                severity="HIGH",
+                evidence=[_valid_evidence()],
+                source_title="Missing liability cap",
+            )
 
 
 # ---------------------------------------------------------------------------

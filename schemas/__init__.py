@@ -19,6 +19,7 @@ from schemas.document_inventory import (
     DocumentType,
 )
 from schemas.evidence_index import EvidenceIndex, EvidenceRecord, EvidenceWarning
+from schemas.exception_triage import ExceptionCategory, ExceptionTriageItem
 from schemas.extracted_clause import (
     ClauseEvidenceSpan,
     ExtractedClause,
@@ -32,6 +33,9 @@ from schemas.policy_rules import (
     ApprovalThreshold,
     ApprovedPaymentTerms,
     AutoRenewalRules,
+    AutoApproveRouting,
+    ExceptionRouteRule,
+    ExceptionRouting,
     EscalationRule,
     GDPRRequirements,
     LiabilityCapRequirements,
@@ -56,6 +60,8 @@ __all__ = [
     "EvidenceIndex",
     "EvidenceRecord",
     "EvidenceWarning",
+    "ExceptionCategory",
+    "ExceptionTriageItem",
     "ClauseEvidenceSpan",
     "ExtractedClause",
     "ExtractedContract",
@@ -65,7 +71,10 @@ __all__ = [
     "ObligationRegisterResult",
     "ApprovalThreshold",
     "ApprovedPaymentTerms",
+    "AutoApproveRouting",
     "AutoRenewalRules",
+    "ExceptionRouteRule",
+    "ExceptionRouting",
     "EscalationRule",
     "GDPRRequirements",
     "LiabilityCapRequirements",

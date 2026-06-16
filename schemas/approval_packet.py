@@ -6,6 +6,7 @@ from typing import Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
+from schemas.exception_triage import ExceptionTriageItem
 from schemas.finding import Finding
 from schemas.risk_result import RiskResult
 
@@ -63,6 +64,10 @@ class ApprovalPacket(BaseModel):
     approval_route: List[ApprovalRoute] = Field(
         default_factory=list,
         description="Approver routing selected by Agent H.",
+    )
+    exceptions: List[ExceptionTriageItem] = Field(
+        default_factory=list,
+        description="Per-exception triage decisions with approvers and evidence.",
     )
     final_findings: List[Finding] = Field(
         default_factory=list,

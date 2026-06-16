@@ -95,6 +95,18 @@ def test_valid_bundle_creates_intake_evidence_extraction_and_validation_artifact
         (run_dir / "approval_packet.json").read_text(encoding="utf-8")
     )
     assert approval_packet["decision"]["status"] in {"AUTO_APPROVE", "ESCALATE"}
+    assert approval_packet["exceptions"]
+    assert all(
+        exception["category"]
+        and exception["approver"]
+        and exception["reason"]
+        and exception["evidence"]
+        for exception in approval_packet["exceptions"]
+    )
+
+    exceptions_markdown = (run_dir / "exceptions.md").read_text(encoding="utf-8")
+    assert "## Next Actions" in exceptions_markdown
+    assert "## Exceptions" in exceptions_markdown
 
 
 def test_invalid_bundle_creates_failed_run_with_audit_log(tmp_path: Path) -> None:
