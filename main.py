@@ -10,6 +10,7 @@ Usage:
 import argparse
 import sys
 
+from agents.extraction_agent import ExtractionAgentError, run_extraction
 from agents.intake_agent import IntakeAgentError, run_intake
 from utils.bundle_loader import BundleLoadError, load_bundle
 from utils.evidence_indexer import EvidenceIndexError, build_evidence_index
@@ -110,6 +111,31 @@ def main() -> int:
         print(f"  Run Dir : {run_info['run_dir']}", file=sys.stderr)
         return 1
 
+    # --- Step 5: Extract structured clauses from the primary contract ---
+    try:
+        extraction_result = run_extraction(
+            bundle_data=bundle_data,
+            document_inventory=intake_result["document_inventory"],
+            evidence_index=evidence_result["evidence_index"],
+            run_id=run_info["run_id"],
+            run_dir=run_info["run_dir"],
+        )
+    except ExtractionAgentError as exc:
+        error_message = str(exc)
+        append_audit_event(
+            run_info["run_dir"],
+            {
+                "event": "extraction_failed",
+                "agent": "extraction_agent",
+                "message": "Extraction Agent failed before structured clauses were completed.",
+                "error": error_message,
+            },
+        )
+        update_run_status(run_info["run_dir"], "failed", error_message)
+        print(f"ERROR: Extraction failed.\n  {exc}", file=sys.stderr)
+        print(f"  Run Dir : {run_info['run_dir']}", file=sys.stderr)
+        return 1
+
     print("\nRun created successfully.")
     print(f"  Run ID  : {run_info['run_id']}")
     print(f"  Run Dir : {run_info['run_dir']}")
@@ -118,6 +144,7 @@ def main() -> int:
     print(f"    - {intake_result['artifact_paths']['context_packet']}")
     print(f"    - {intake_result['artifact_paths']['document_inventory']}")
     print(f"    - {evidence_result['artifact_paths']['evidence_index']}")
+    print(f"    - {extraction_result['artifact_paths']['extracted_contract']}")
 
     return 0
 

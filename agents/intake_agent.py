@@ -3,7 +3,6 @@
 This agent will be the first in the pipeline. It receives a raw bundle,
 validates its contents, and produces a ContextPacket for downstream agents.
 
-LLM logic will be added in a later user story.
 """
 
 import json
