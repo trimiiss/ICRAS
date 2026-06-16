@@ -17,6 +17,7 @@ from schemas.extracted_clause import (
 )
 from schemas.finding import Finding
 from schemas.risk_result import RiskResult
+from schemas.validation_result import ValidatedContractField, ValidationResult
 
 __all__ = [
     "Severity",
@@ -36,4 +37,6 @@ __all__ = [
     "Finding",
     "RiskResult",
     "ApprovalPacket",
+    "ValidatedContractField",
+    "ValidationResult",
 ]

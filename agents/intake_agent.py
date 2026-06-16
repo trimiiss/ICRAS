@@ -116,12 +116,14 @@ def _build_context_packet(
     run_id: str,
 ) -> ContextPacket:
     """Create the validated context packet for downstream agents."""
+    effective_date = manifest.get("effective_date")
     return ContextPacket(
         run_id=run_id,
         bundle_name=str(manifest["bundle_name"]),
         contract_type=str(manifest["contract_type"]),
         counterparty=str(manifest["counterparty"]),
         jurisdiction=str(manifest["jurisdiction"]),
+        effective_date=str(effective_date) if effective_date is not None else None,
         contract_file=str(manifest["contract_file"]),
         playbook=dict(bundle_data.get("playbook", {})),
         approval_policy=dict(bundle_data.get("approval_policy", {})),

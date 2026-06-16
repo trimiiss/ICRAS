@@ -16,6 +16,7 @@ from schemas.extracted_clause import ExtractedClause, ExtractedContract
 from schemas.finding import Finding
 from schemas.risk_result import RiskResult
 from schemas.approval_packet import ApprovalDecision, ApprovalPacket
+from schemas.validation_result import ValidationResult, ValidatedContractField
 
 
 # ---------------------------------------------------------------------------
@@ -199,6 +200,30 @@ class TestContextPacket:
         )
         assert cp.run_id == "20250101_120000_abc12345"
         assert cp.playbook == {}
+
+
+# ---------------------------------------------------------------------------
+# ValidationResult
+# ---------------------------------------------------------------------------
+
+class TestValidationResult:
+    def test_valid_validation_result(self):
+        vr = ValidationResult(
+            run_id="20250101_120000_abc12345",
+            normalized_fields={"effective_date": "2025-01-15"},
+            validated_fields=[
+                ValidatedContractField(
+                    field_name="effective_date",
+                    is_present=True,
+                    normalized_value="2025-01-15",
+                    source="context",
+                    evidence=[EvidencePointer(source_file="contract.pdf")],
+                )
+            ],
+            findings=[],
+        )
+        assert vr.normalized_fields["effective_date"] == "2025-01-15"
+        assert vr.validated_fields[0].field_name == "effective_date"
 
 
 # ---------------------------------------------------------------------------
