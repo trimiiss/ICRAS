@@ -14,6 +14,7 @@ from pathlib import Path
 from agents.counterparty_agent import CounterpartyAgentError, run_counterparty_check
 from agents.extraction_agent import ExtractionAgentError, run_extraction
 from agents.intake_agent import IntakeAgentError, run_intake
+from agents.risk_agent import RiskAgentError, run_risk_assessment
 from agents.validation_agent import ValidationAgentError, run_validation
 from utils.bundle_loader import BundleLoadError, load_bundle
 from utils.evidence_indexer import EvidenceIndexError, build_evidence_index
@@ -163,7 +164,31 @@ def main() -> int:
         print(f"  Run Dir : {run_info['run_dir']}", file=sys.stderr)
         return 1
 
-    # --- Step 7: Resolve counterparty names against vendor master ---
+    # --- Step 7: Score extracted clauses against risk policy ---
+    try:
+        risk_result = run_risk_assessment(
+            context=intake_result["context_packet"],
+            extracted_contract=extraction_result["extracted_contract"],
+            validation_result=validation_result["validation_result"],
+            run_dir=run_info["run_dir"],
+        )
+    except RiskAgentError as exc:
+        error_message = str(exc)
+        append_audit_event(
+            run_info["run_dir"],
+            {
+                "event": "risk_scoring_failed",
+                "agent": "risk_agent",
+                "message": "Agent E failed before clause analysis was completed.",
+                "error": error_message,
+            },
+        )
+        update_run_status(run_info["run_dir"], "failed", error_message)
+        print(f"ERROR: Risk scoring failed.\n  {exc}", file=sys.stderr)
+        print(f"  Run Dir : {run_info['run_dir']}", file=sys.stderr)
+        return 1
+
+    # --- Step 8: Resolve counterparty names against vendor master ---
     try:
         counterparty_result = run_counterparty_check(
             context=intake_result["context_packet"],
@@ -198,6 +223,7 @@ def main() -> int:
     print(f"    - {evidence_result['artifact_paths']['evidence_index']}")
     print(f"    - {extraction_result['artifact_paths']['extracted_contract']}")
     print(f"    - {validation_result['artifact_paths']['validation_findings']}")
+    print(f"    - {risk_result['artifact_paths']['clause_analysis']}")
     print(f"    - {counterparty_result['artifact_paths']['counterparty_resolution']}")
     print(f"    - {run_info['run_dir']}\\audit_log.md")
 

@@ -32,6 +32,7 @@ def test_valid_bundle_creates_intake_evidence_extraction_and_validation_artifact
     assert "evidence_index.json" in result.stdout
     assert "extracted_contract.json" in result.stdout
     assert "validation_findings.json" in result.stdout
+    assert "clause_analysis.json" in result.stdout
     assert "audit_log.md" in result.stdout
 
     run_dirs = list((tmp_path / "runs").iterdir())
@@ -43,6 +44,7 @@ def test_valid_bundle_creates_intake_evidence_extraction_and_validation_artifact
     assert (run_dir / "evidence_index.json").is_file()
     assert (run_dir / "extracted_contract.json").is_file()
     assert (run_dir / "validation_findings.json").is_file()
+    assert (run_dir / "clause_analysis.json").is_file()
     assert (run_dir / "audit_log.md").is_file()
 
     evidence_index = json.loads(
@@ -60,6 +62,11 @@ def test_valid_bundle_creates_intake_evidence_extraction_and_validation_artifact
         (run_dir / "validation_findings.json").read_text(encoding="utf-8")
     )
     assert "validated_fields" in validation_findings
+
+    clause_analysis = json.loads(
+        (run_dir / "clause_analysis.json").read_text(encoding="utf-8")
+    )
+    assert "clause_risks" in clause_analysis
 
 
 def test_invalid_bundle_creates_failed_run_with_audit_log(tmp_path: Path) -> None:
