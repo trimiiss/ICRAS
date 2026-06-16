@@ -31,7 +31,7 @@ from schemas.policy_rules import (
     PolicyRules,
     SigningAuthorityThresholds,
 )
-from schemas.risk_result import RiskResult
+from schemas.risk_result import ClauseAnalysisResult, ClauseRisk, RiskResult
 from schemas.validation_result import ValidatedContractField, ValidationResult
 
 __all__ = [
@@ -61,6 +61,8 @@ __all__ = [
     "LiabilityCapRequirements",
     "PolicyRules",
     "SigningAuthorityThresholds",
+    "ClauseAnalysisResult",
+    "ClauseRisk",
     "RiskResult",
     "ApprovalPacket",
     "ValidatedContractField",
