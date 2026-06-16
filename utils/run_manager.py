@@ -110,7 +110,7 @@ def create_run_folder(
 
 
 def append_audit_event(run_dir: str | Path, event: Dict[str, Any]) -> None:
-    """Append a timestamped audit event to ``audit_log.jsonl``.
+    """Append a timestamped audit event to ``audit_log.jsonl`` and ``audit_log.md``.
 
     Args:
         run_dir: Directory for the current pipeline run.
@@ -133,6 +133,7 @@ def append_audit_event(run_dir: str | Path, event: Dict[str, Any]) -> None:
     with open(run_path / "audit_log.jsonl", "a", encoding="utf-8") as f:
         json.dump(event_with_time, f, ensure_ascii=False)
         f.write("\n")
+    _append_markdown_audit_event(run_path / "audit_log.md", event_with_time)
 
 
 def update_run_status(
@@ -196,6 +197,28 @@ def _default_config(bundle_path: str) -> Dict[str, Any]:
             "require_human_review_above": "HIGH",
         },
     }
+
+
+def _append_markdown_audit_event(filepath: Path, event: Dict[str, Any]) -> None:
+    """Append one audit event in a readable markdown format."""
+    if not filepath.exists():
+        filepath.write_text("# ICRAS Audit Log\n\n", encoding="utf-8")
+
+    summary = [
+        f"## {event.get('event', 'event')}",
+        f"- Timestamp: {event.get('timestamp', '')}",
+        f"- Agent: {event.get('agent', '')}",
+        f"- Message: {event.get('message', '')}",
+    ]
+    if event.get("error"):
+        summary.append(f"- Error: {event['error']}")
+    if event.get("artifacts"):
+        artifacts = ", ".join(str(artifact) for artifact in event["artifacts"])
+        summary.append(f"- Artifacts: {artifacts}")
+
+    with open(filepath, "a", encoding="utf-8") as file:
+        file.write("\n".join(summary))
+        file.write("\n\n")
 
 
 def _write_json(filepath: Path, data: Dict[str, Any]) -> None:
