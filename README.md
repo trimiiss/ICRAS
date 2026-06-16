@@ -122,6 +122,11 @@ triage items with category, approver, reason, next action, and evidence links.
 The route table is configured in each bundle's `approval_policy.yaml` under
 `exception_routing`, so approver routing can change without Python code edits.
 
+`posting_payload.json` is a vendor-neutral CLM integration payload. It is
+validated by Pydantic and grouped into `contract`, `counterparty`, `decision`,
+`risk`, `approval`, and structured `artifacts` sections so a mock CLM adapter
+can consume it without parsing the internal run artifacts first.
+
 ---
 
 ## Running Tests

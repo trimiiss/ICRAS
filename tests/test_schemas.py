@@ -16,6 +16,15 @@ from schemas.exception_triage import ExceptionCategory, ExceptionTriageItem
 from schemas.extracted_clause import ExtractedClause, ExtractedContract
 from schemas.finding import Finding
 from schemas.policy_rules import PolicyRules
+from schemas.posting_payload import (
+    ApprovalPostingData,
+    ArtifactReference,
+    ContractPostingData,
+    CounterpartyPostingData,
+    DecisionPostingData,
+    PostingPayload,
+    RiskPostingData,
+)
 from schemas.risk_result import RiskResult
 from schemas.approval_packet import ApprovalDecision, ApprovalPacket
 from schemas.validation_result import ValidationResult, ValidatedContractField
@@ -320,3 +329,74 @@ class TestApprovalPacket:
         )
         assert ap.reviewer == "Jane Smith"
         assert ap.decision.approved is True
+
+
+# ---------------------------------------------------------------------------
+# PostingPayload
+# ---------------------------------------------------------------------------
+
+class TestPostingPayload:
+    def test_valid_clm_posting_payload(self):
+        payload = PostingPayload(
+            run_id="20250101_120000_abc12345",
+            contract=ContractPostingData(
+                contract_id="clean_nda:DOC-002:contract.pdf",
+                document_id="DOC-002",
+                bundle_name="clean_nda",
+                contract_type="Non-Disclosure Agreement",
+                source_file="contract.pdf",
+                jurisdiction="Delaware, USA",
+                effective_date="2025-01-15",
+            ),
+            counterparty=CounterpartyPostingData(
+                name="Acme Corporation",
+                resolution_status="exact",
+                vendor_id="V-001",
+                matched_vendor_name="Acme Corporation",
+                match_confidence=1.0,
+            ),
+            decision=DecisionPostingData(
+                status="ESCALATE",
+                approved=False,
+                rationale="High-severity finding requires approval.",
+                requires_human_review=True,
+            ),
+            risk=RiskPostingData(
+                overall_severity="HIGH",
+                summary="One high-severity finding.",
+                final_finding_count=1,
+                critical_finding_count=0,
+                high_finding_count=1,
+                categories=["clause_risk"],
+            ),
+            approval=ApprovalPostingData(
+                approval_required=True,
+                routes=[],
+                next_approvers=["legal_counsel"],
+            ),
+            artifacts=[
+                ArtifactReference(
+                    name="approval_packet",
+                    path="/tmp/run/approval_packet.json",
+                    artifact_type="json",
+                )
+            ],
+            artifact_references={
+                "approval_packet": "/tmp/run/approval_packet.json",
+            },
+        )
+
+        assert payload.payload_version == "1.0"
+        assert payload.payload_type == "CLM_POSTING_PAYLOAD"
+        assert payload.contract.contract_id == "clean_nda:DOC-002:contract.pdf"
+        assert payload.decision.status.value == "ESCALATE"
+
+    def test_posting_payload_rejects_missing_contract_id(self):
+        with pytest.raises(ValidationError, match="contract_id"):
+            ContractPostingData(
+                document_id="DOC-002",
+                bundle_name="clean_nda",
+                contract_type="Non-Disclosure Agreement",
+                source_file="contract.pdf",
+                jurisdiction="Delaware, USA",
+            )

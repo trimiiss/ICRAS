@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 from main import _require_metrics_status
+from schemas.posting_payload import PostingPayload
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -107,6 +108,23 @@ def test_valid_bundle_creates_intake_evidence_extraction_and_validation_artifact
     exceptions_markdown = (run_dir / "exceptions.md").read_text(encoding="utf-8")
     assert "## Next Actions" in exceptions_markdown
     assert "## Exceptions" in exceptions_markdown
+
+    posting_payload = PostingPayload.model_validate_json(
+        (run_dir / "posting_payload.json").read_text(encoding="utf-8")
+    )
+    assert posting_payload.payload_version == "1.0"
+    assert posting_payload.payload_type == "CLM_POSTING_PAYLOAD"
+    assert posting_payload.source_system == "ICRAS"
+    assert posting_payload.contract.contract_id
+    assert posting_payload.contract.bundle_name == "clean_nda"
+    assert posting_payload.counterparty.name
+    assert posting_payload.decision.status.value in {"AUTO_APPROVE", "ESCALATE"}
+    assert posting_payload.risk.summary
+    assert posting_payload.approval.next_approvers
+    assert posting_payload.artifacts
+    assert set(posting_payload.artifact_references) == {
+        artifact.name for artifact in posting_payload.artifacts
+    }
 
 
 def test_invalid_bundle_creates_failed_run_with_audit_log(tmp_path: Path) -> None:
