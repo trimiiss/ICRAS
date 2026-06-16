@@ -171,6 +171,7 @@ def main() -> int:
     print(f"    - {evidence_result['artifact_paths']['evidence_index']}")
     print(f"    - {extraction_result['artifact_paths']['extracted_contract']}")
     print(f"    - {validation_result['artifact_paths']['validation_findings']}")
+    print(f"    - {run_info['run_dir']}\\audit_log.md")
 
     return 0
 

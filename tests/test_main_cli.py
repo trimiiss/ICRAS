@@ -32,6 +32,7 @@ def test_valid_bundle_creates_intake_evidence_extraction_and_validation_artifact
     assert "evidence_index.json" in result.stdout
     assert "extracted_contract.json" in result.stdout
     assert "validation_findings.json" in result.stdout
+    assert "audit_log.md" in result.stdout
 
     run_dirs = list((tmp_path / "runs").iterdir())
     assert len(run_dirs) == 1
@@ -42,6 +43,7 @@ def test_valid_bundle_creates_intake_evidence_extraction_and_validation_artifact
     assert (run_dir / "evidence_index.json").is_file()
     assert (run_dir / "extracted_contract.json").is_file()
     assert (run_dir / "validation_findings.json").is_file()
+    assert (run_dir / "audit_log.md").is_file()
 
     evidence_index = json.loads(
         (run_dir / "evidence_index.json").read_text(encoding="utf-8")
@@ -96,3 +98,7 @@ def test_invalid_bundle_creates_failed_run_with_audit_log(tmp_path: Path) -> Non
     assert audit_event["event"] == "bundle_validation_failed"
     assert audit_event["agent"] == "intake_agent"
     assert "playbook.yaml" in audit_event["error"]
+
+    audit_markdown = (run_dir / "audit_log.md").read_text(encoding="utf-8")
+    assert "bundle_validation_failed" in audit_markdown
+    assert "playbook.yaml" in audit_markdown
