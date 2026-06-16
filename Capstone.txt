@@ -344,8 +344,8 @@ Slide 23: Demo Expectations
 Core System Strengths
 Highlight automated extraction, deterministic matching, and intelligent routing in the demo to showcase system capabilities.
 
-Invoice Handling Scenarios
-Demonstrate handling clean invoices, variance approvals, and anomaly investigations to cover typical invoice cases.
+Contract Handling Scenarios
+Demonstrate handling clean contracts, policy deviations, and risk assessment to cover typical contract review cases.
 
 Run Artifacts and Evidence
 Display posting payloads and detailed audit logs highlighting evidence pointers and policy-driven logic.
