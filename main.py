@@ -14,6 +14,10 @@ from pathlib import Path
 from agents.counterparty_agent import CounterpartyAgentError, run_counterparty_check
 from agents.extraction_agent import ExtractionAgentError, run_extraction
 from agents.intake_agent import IntakeAgentError, run_intake
+from agents.orchestrator_agent import (
+    ObligationRegisterError,
+    run_obligation_register,
+)
 from agents.risk_agent import RiskAgentError, run_risk_assessment
 from agents.validation_agent import ValidationAgentError, run_validation
 from utils.bundle_loader import BundleLoadError, load_bundle
@@ -213,6 +217,29 @@ def main() -> int:
         print(f"  Run Dir : {run_info['run_dir']}", file=sys.stderr)
         return 1
 
+    # --- Step 9: Generate Agent H obligation register ---
+    try:
+        obligation_result = run_obligation_register(
+            context=intake_result["context_packet"],
+            extracted_contract=extraction_result["extracted_contract"],
+            run_dir=run_info["run_dir"],
+        )
+    except ObligationRegisterError as exc:
+        error_message = str(exc)
+        append_audit_event(
+            run_info["run_dir"],
+            {
+                "event": "obligation_register_failed",
+                "agent": "orchestrator_agent",
+                "message": "Agent H failed before obligations.csv was completed.",
+                "error": error_message,
+            },
+        )
+        update_run_status(run_info["run_dir"], "failed", error_message)
+        print(f"ERROR: Obligation register failed.\n  {exc}", file=sys.stderr)
+        print(f"  Run Dir : {run_info['run_dir']}", file=sys.stderr)
+        return 1
+
     print("\nRun created successfully.")
     print(f"  Run ID  : {run_info['run_id']}")
     print(f"  Run Dir : {run_info['run_dir']}")
@@ -225,6 +252,7 @@ def main() -> int:
     print(f"    - {validation_result['artifact_paths']['validation_findings']}")
     print(f"    - {risk_result['artifact_paths']['clause_analysis']}")
     print(f"    - {counterparty_result['artifact_paths']['counterparty_resolution']}")
+    print(f"    - {obligation_result['artifact_paths']['obligations']}")
     print(f"    - {run_info['run_dir']}\\audit_log.md")
 
     return 0
