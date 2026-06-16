@@ -8,6 +8,7 @@ Slide 2 — Agenda
 
 Agenda
 
+
 Intelligent Contract Review Overview
 Architecture Overview
 Agent Specifications
@@ -343,6 +344,7 @@ Part Six
 Slide 23: Demo Expectations
 Core System Strengths
 Highlight automated extraction, deterministic matching, and intelligent routing in the demo to showcase system capabilities.
+
 
 Contract Handling Scenarios
 Demonstrate handling clean contracts, policy deviations, and risk assessment to cover typical contract review cases.
