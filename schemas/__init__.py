@@ -3,6 +3,11 @@
 from schemas.approval_packet import ApprovalPacket
 from schemas.common import ConfidenceScore, EvidencePointer, Severity
 from schemas.context_packet import ContextPacket
+from schemas.counterparty_result import (
+    CounterpartyMatch,
+    CounterpartyResolution,
+    MatchStatus,
+)
 from schemas.document_inventory import (
     DocumentInventory,
     DocumentInventoryItem,
@@ -34,6 +39,9 @@ __all__ = [
     "EvidencePointer",
     "ConfidenceScore",
     "ContextPacket",
+    "CounterpartyMatch",
+    "CounterpartyResolution",
+    "MatchStatus",
     "DocumentInventory",
     "DocumentInventoryItem",
     "DocumentType",

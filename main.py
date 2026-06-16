@@ -10,6 +10,7 @@ Usage:
 import argparse
 import sys
 
+from agents.counterparty_agent import CounterpartyAgentError, run_counterparty_check
 from agents.extraction_agent import ExtractionAgentError, run_extraction
 from agents.intake_agent import IntakeAgentError, run_intake
 from agents.validation_agent import ValidationAgentError, run_validation
@@ -161,6 +162,31 @@ def main() -> int:
         print(f"  Run Dir : {run_info['run_dir']}", file=sys.stderr)
         return 1
 
+    # --- Step 7: Resolve counterparty names against vendor master ---
+    try:
+        counterparty_result = run_counterparty_check(
+            context=intake_result["context_packet"],
+            extracted_contract=extraction_result["extracted_contract"],
+            vendor_master_path="data/vendor_master.csv",
+            run_dir=run_info["run_dir"],
+            evidence_index=evidence_result["evidence_index"],
+        )
+    except CounterpartyAgentError as exc:
+        error_message = str(exc)
+        append_audit_event(
+            run_info["run_dir"],
+            {
+                "event": "counterparty_resolution_failed",
+                "agent": "counterparty_agent",
+                "message": "Agent C failed before counterparty resolution was completed.",
+                "error": error_message,
+            },
+        )
+        update_run_status(run_info["run_dir"], "failed", error_message)
+        print(f"ERROR: Counterparty resolution failed.\n  {exc}", file=sys.stderr)
+        print(f"  Run Dir : {run_info['run_dir']}", file=sys.stderr)
+        return 1
+
     print("\nRun created successfully.")
     print(f"  Run ID  : {run_info['run_id']}")
     print(f"  Run Dir : {run_info['run_dir']}")
@@ -171,6 +197,7 @@ def main() -> int:
     print(f"    - {evidence_result['artifact_paths']['evidence_index']}")
     print(f"    - {extraction_result['artifact_paths']['extracted_contract']}")
     print(f"    - {validation_result['artifact_paths']['validation_findings']}")
+    print(f"    - {counterparty_result['artifact_paths']['counterparty_resolution']}")
     print(f"    - {run_info['run_dir']}\\audit_log.md")
 
     return 0
