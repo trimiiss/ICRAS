@@ -9,6 +9,7 @@ Usage:
 
 import argparse
 import sys
+from pathlib import Path
 
 from agents.counterparty_agent import CounterpartyAgentError, run_counterparty_check
 from agents.extraction_agent import ExtractionAgentError, run_extraction
@@ -167,7 +168,7 @@ def main() -> int:
         counterparty_result = run_counterparty_check(
             context=intake_result["context_packet"],
             extracted_contract=extraction_result["extracted_contract"],
-            vendor_master_path="data/vendor_master.csv",
+            vendor_master_path=Path(bundle_data["bundle_dir"]) / "vendor_master.csv",
             run_dir=run_info["run_dir"],
             evidence_index=evidence_result["evidence_index"],
         )
