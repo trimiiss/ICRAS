@@ -21,6 +21,7 @@ from schemas.extracted_clause import (
     ExtractionWarning,
 )
 from schemas.finding import Finding
+from schemas.obligation_result import ObligationRecord, ObligationRegisterResult
 from schemas.policy_rules import (
     ApprovalThreshold,
     ApprovedPaymentTerms,
@@ -53,6 +54,8 @@ __all__ = [
     "ExtractedContract",
     "ExtractionWarning",
     "Finding",
+    "ObligationRecord",
+    "ObligationRegisterResult",
     "ApprovalThreshold",
     "ApprovedPaymentTerms",
     "AutoRenewalRules",
