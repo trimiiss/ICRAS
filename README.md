@@ -2,7 +2,7 @@
 
 ICRAS is a multi-agent AI pipeline that automates the review, risk assessment, and approval of legal contracts. It ingests a **contract bundle** (PDF contract + supporting policy files), runs it through a chain of specialized agents, and produces a structured **approval packet** with findings, risk scores, and recommendations.
 
-> **Sprint 1 Status:** Foundation only. Repository structure, Pydantic schemas, bundle loading, and deterministic run folders are implemented. Actual agent intelligence (LLM calls) will be added in later user stories.
+> **Sprint 2 Status:** Agent H now orchestrates the deterministic pipeline with LangGraph. LLM-backed reasoning can be added in later stories without changing the file-based artifact contract.
 
 ---
 
@@ -11,7 +11,7 @@ ICRAS is a multi-agent AI pipeline that automates the review, risk assessment, a
 ```
 icras/
 ├── main.py                  # CLI entry point
-├── agents/                  # Agent placeholders (no LLM logic yet)
+├── agents/                  # Deterministic pipeline agents
 │   ├── intake_agent.py
 │   ├── extraction_agent.py
 │   ├── counterparty_agent.py
@@ -73,7 +73,8 @@ pip install -r requirements.txt
 Copy-Item .env.example .env
 ```
 
-Edit `.env` and fill in your API keys when needed (not required for Sprint 1).
+Edit `.env` and fill in your API keys when needed. LangGraph runs locally
+without an API key; LangSmith tracing uses `LANGSMITH_API_KEY` when enabled.
 
 ---
 
@@ -95,9 +96,23 @@ Each run creates a unique folder under `runs/` with this structure:
 
 ```
 runs/<run_id>/
-├── metadata.json       # Run ID, bundle path, timestamps, status
-├── config.json         # Initial pipeline configuration
-└── audit_log.jsonl     # Audit trail (initially empty)
+├── metadata.json
+├── config.json
+├── audit_log.jsonl
+├── audit_log.md
+├── context_packet.json
+├── document_inventory.json
+├── evidence_index.json
+├── extracted_contract.json
+├── validation_findings.json
+├── counterparty_resolution.json
+├── clause_analysis.json
+├── obligations.csv
+├── final_findings.json
+├── exceptions.md
+├── approval_packet.json
+├── posting_payload.json
+└── metrics.json
 ```
 
 Running the same bundle multiple times produces separate run folders.
@@ -153,3 +168,13 @@ under net-30 policy and accepted after the YAML is changed to net-60.
 | **Schema** | A Pydantic v2 model that validates structured data between agents |
 | **Agent** | A specialized module that performs one step of the review pipeline |
 
+## Optional LangSmith Tracing
+
+LangGraph runs locally without an API key. To send pipeline traces to LangSmith,
+copy `.env.example` to `.env` and set:
+
+```powershell
+LANGSMITH_TRACING=true
+LANGSMITH_API_KEY=your_langsmith_key
+LANGSMITH_PROJECT=icras-agent-h
+```

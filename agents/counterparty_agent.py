@@ -11,7 +11,7 @@ import json
 import re
 import unicodedata
 from pathlib import Path
-from typing import Any, Dict, List, Mapping, Optional, Sequence
+from typing import Any, Dict, Mapping, Optional, Sequence
 
 from thefuzz import fuzz
 

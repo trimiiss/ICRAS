@@ -6,6 +6,10 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
+from main import _require_metrics_status
+
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 NDA_BUNDLE = PROJECT_ROOT / "data" / "bundles" / "clean_nda"
@@ -34,6 +38,13 @@ def test_valid_bundle_creates_intake_evidence_extraction_and_validation_artifact
     assert "validation_findings.json" in result.stdout
     assert "clause_analysis.json" in result.stdout
     assert "audit_log.md" in result.stdout
+    assert "counterparty_resolution.json" in result.stdout
+    assert "obligations.csv" in result.stdout
+    assert "final_findings.json" in result.stdout
+    assert "exceptions.md" in result.stdout
+    assert "approval_packet.json" in result.stdout
+    assert "posting_payload.json" in result.stdout
+    assert "metrics.json" in result.stdout
 
     run_dirs = list((tmp_path / "runs").iterdir())
     assert len(run_dirs) == 1
@@ -45,6 +56,13 @@ def test_valid_bundle_creates_intake_evidence_extraction_and_validation_artifact
     assert (run_dir / "extracted_contract.json").is_file()
     assert (run_dir / "validation_findings.json").is_file()
     assert (run_dir / "clause_analysis.json").is_file()
+    assert (run_dir / "counterparty_resolution.json").is_file()
+    assert (run_dir / "obligations.csv").is_file()
+    assert (run_dir / "final_findings.json").is_file()
+    assert (run_dir / "exceptions.md").is_file()
+    assert (run_dir / "approval_packet.json").is_file()
+    assert (run_dir / "posting_payload.json").is_file()
+    assert (run_dir / "metrics.json").is_file()
     assert (run_dir / "audit_log.md").is_file()
 
     evidence_index = json.loads(
@@ -67,6 +85,16 @@ def test_valid_bundle_creates_intake_evidence_extraction_and_validation_artifact
         (run_dir / "clause_analysis.json").read_text(encoding="utf-8")
     )
     assert "clause_risks" in clause_analysis
+
+    final_findings = json.loads(
+        (run_dir / "final_findings.json").read_text(encoding="utf-8")
+    )
+    assert "findings" in final_findings
+
+    approval_packet = json.loads(
+        (run_dir / "approval_packet.json").read_text(encoding="utf-8")
+    )
+    assert approval_packet["decision"]["status"] in {"AUTO_APPROVE", "ESCALATE"}
 
 
 def test_invalid_bundle_creates_failed_run_with_audit_log(tmp_path: Path) -> None:
@@ -100,12 +128,28 @@ def test_invalid_bundle_creates_failed_run_with_audit_log(tmp_path: Path) -> Non
     assert "playbook.yaml" in metadata["error_message"]
 
     audit_lines = (run_dir / "audit_log.jsonl").read_text(encoding="utf-8").splitlines()
-    assert len(audit_lines) == 1
-    audit_event = json.loads(audit_lines[0])
-    assert audit_event["event"] == "bundle_validation_failed"
-    assert audit_event["agent"] == "intake_agent"
-    assert "playbook.yaml" in audit_event["error"]
+    assert len(audit_lines) >= 3
+    audit_events = [json.loads(line) for line in audit_lines]
+    event_names = {event["event"] for event in audit_events}
+    assert "create_run_completed" in event_names
+    assert "load_bundle_started" in event_names
+    assert "load_bundle_failed" in event_names
+    failed_event = next(event for event in audit_events if event["event"] == "load_bundle_failed")
+    assert failed_event["agent"] == "bundle_loader"
+    assert "playbook.yaml" in failed_event["error"]
 
     audit_markdown = (run_dir / "audit_log.md").read_text(encoding="utf-8")
-    assert "bundle_validation_failed" in audit_markdown
+    assert "load_bundle_failed" in audit_markdown
     assert "playbook.yaml" in audit_markdown
+
+
+def test_require_metrics_status_rejects_missing_status() -> None:
+    """CLI summary should not pretend a missing metrics.status is completed."""
+    with pytest.raises(RuntimeError, match="metrics.status is missing"):
+        _require_metrics_status({})
+
+
+def test_require_metrics_status_rejects_non_mapping_metrics() -> None:
+    """CLI summary should fail clearly when metrics has the wrong shape."""
+    with pytest.raises(RuntimeError, match="metrics is missing or not a mapping"):
+        _require_metrics_status(None)

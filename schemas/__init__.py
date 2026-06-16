@@ -1,6 +1,11 @@
 """ICRAS core Pydantic v2 schemas for inter-agent communication."""
 
-from schemas.approval_packet import ApprovalPacket
+from schemas.approval_packet import (
+    ApprovalDecision,
+    ApprovalPacket,
+    ApprovalRoute,
+    ApprovalStatus,
+)
 from schemas.common import ConfidenceScore, EvidencePointer, Severity
 from schemas.context_packet import ContextPacket
 from schemas.counterparty_result import (
@@ -21,6 +26,7 @@ from schemas.extracted_clause import (
     ExtractionWarning,
 )
 from schemas.finding import Finding
+from schemas.final_artifacts import FinalFindingsResult, PipelineMetrics
 from schemas.obligation_result import ObligationRecord, ObligationRegisterResult
 from schemas.policy_rules import (
     ApprovalThreshold,
@@ -33,6 +39,7 @@ from schemas.policy_rules import (
     SigningAuthorityThresholds,
 )
 from schemas.risk_result import ClauseAnalysisResult, ClauseRisk, RiskResult
+from schemas.posting_payload import PostingPayload
 from schemas.validation_result import ValidatedContractField, ValidationResult
 
 __all__ = [
@@ -67,7 +74,13 @@ __all__ = [
     "ClauseAnalysisResult",
     "ClauseRisk",
     "RiskResult",
+    "ApprovalDecision",
     "ApprovalPacket",
+    "ApprovalRoute",
+    "ApprovalStatus",
+    "FinalFindingsResult",
+    "PipelineMetrics",
+    "PostingPayload",
     "ValidatedContractField",
     "ValidationResult",
 ]
