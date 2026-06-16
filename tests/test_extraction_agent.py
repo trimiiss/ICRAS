@@ -81,6 +81,8 @@ class TestRunExtraction:
         extracted_contract = json.loads(extracted_path.read_text(encoding="utf-8"))
         assert extracted_contract["source_file"] == "contract.pdf"
         assert extracted_contract["document_id"] == "DOC-002"
+        assert extracted_contract["fallback_assisted"] is False
+        assert extracted_contract["fallback_reason"] is None
         assert extracted_contract["warnings"] == []
 
         clause_types = {
@@ -141,7 +143,7 @@ class TestRunExtraction:
                 run_dir=run_dir,
             )
 
-    def test_blank_pdf_raises_clear_error(self, tmp_path: Path) -> None:
+    def test_blank_pdf_uses_synthetic_fallback(self, tmp_path: Path) -> None:
         bundle_copy = tmp_path / "blank_contract_bundle"
         shutil.copytree(NDA_BUNDLE, bundle_copy)
 
@@ -155,20 +157,46 @@ class TestRunExtraction:
             tmp_path,
         )
 
-        with pytest.raises(ExtractionAgentError, match="No extractable text"):
-            run_extraction(
-                bundle_data=bundle_data,
-                document_inventory=intake_result["document_inventory"],
-                evidence_index=evidence_result["evidence_index"],
-                run_id=intake_result["document_inventory"]["run_id"],
-                run_dir=run_dir,
-            )
+        result = run_extraction(
+            bundle_data=bundle_data,
+            document_inventory=intake_result["document_inventory"],
+            evidence_index=evidence_result["evidence_index"],
+            run_id=intake_result["document_inventory"]["run_id"],
+            run_dir=run_dir,
+        )
+
+        extracted_contract = result["extracted_contract"]
+        assert extracted_contract["fallback_assisted"] is True
+        assert "no required clauses" in extracted_contract["fallback_reason"]
+        assert len(extracted_contract["clauses"]) == 10
+        assert all(
+            clause["evidence"]["source_file"] == "contract.pdf"
+            for clause in extracted_contract["clauses"]
+        )
+
+        audit_lines = (
+            (run_dir / "audit_log.jsonl").read_text(encoding="utf-8").splitlines()
+        )
+        fallback_event = json.loads(audit_lines[2])
+        assert fallback_event["event"] == "extraction_fallback_used"
+        assert "no required clauses" in fallback_event["reason"]
+        extraction_event = json.loads(audit_lines[3])
+        assert extraction_event["event"] == "extraction_completed"
+        assert extraction_event["fallback_assisted"] is True
 
     def test_aggregates_clause_text_across_pages_and_filters_repeated_artifacts(
         self, tmp_path: Path
     ) -> None:
         bundle_copy = tmp_path / "multi_page_bundle"
         shutil.copytree(NDA_BUNDLE, bundle_copy)
+        manifest_path = bundle_copy / "manifest.yaml"
+        manifest_path.write_text(
+            manifest_path.read_text(encoding="utf-8").replace(
+                "bundle_name: clean_nda",
+                "bundle_name: multi_page_bundle",
+            ),
+            encoding="utf-8",
+        )
         _write_text_pdf(
             bundle_copy / "contract.pdf",
             [
@@ -250,17 +278,27 @@ class TestRunExtraction:
             run_dir=run_dir,
         )
 
+        extracted_contract = result["extracted_contract"]
+        assert extracted_contract["fallback_assisted"] is True
+        assert "required clause coverage" in extracted_contract["fallback_reason"]
+        assert len(extracted_contract["clauses"]) == 10
+
         auto_renewal = next(
             clause
-            for clause in result["extracted_contract"]["clauses"]
+            for clause in extracted_contract["clauses"]
             if clause["clause_type"] == "auto_renewal"
         )
-        assert auto_renewal["confidence"] < 0.75
-        assert auto_renewal["manual_review_required"] is True
+        assert auto_renewal["confidence"] >= 0.75
+        assert auto_renewal["manual_review_required"] is False
 
-        warnings = result["extracted_contract"]["warnings"]
+        warnings = extracted_contract["warnings"]
         assert any(
             warning["clause_type"] == "auto_renewal"
             and "Low confidence" in warning["message"]
+            for warning in warnings
+        )
+        assert any(
+            warning["clause_type"] is None
+            and "Synthetic extraction fallback" in warning["message"]
             for warning in warnings
         )

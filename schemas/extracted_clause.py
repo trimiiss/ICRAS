@@ -123,6 +123,14 @@ class ExtractedContract(BaseModel):
     run_id: str = Field(..., description="Unique identifier for this pipeline run.")
     document_id: str = Field(..., description="Primary contract document ID.")
     source_file: str = Field(..., description="Primary contract source file.")
+    fallback_assisted: bool = Field(
+        default=False,
+        description="Whether synthetic fallback data assisted this extraction.",
+    )
+    fallback_reason: Optional[str] = Field(
+        default=None,
+        description="Reason synthetic fallback data was used, if applicable.",
+    )
     clauses: list[ExtractedClause] = Field(
         default_factory=list,
         description="Extracted clauses and key terms from the source contract.",
