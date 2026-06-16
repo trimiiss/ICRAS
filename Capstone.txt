@@ -191,31 +191,31 @@ Agent C uses fuzzy matching on counterparty data to identify discrepancies and f
 
 2. Contract Field Validation
 
-Agent D ensures contract accuracy by verifying mandatory fields, normalizing date formats, and detecting calculation errors.
+    Agent D ensures contract accuracy by verifying mandatory fields, normalizing date formats, and detecting calculation errors.
 
-3. Data Integrity Safeguards
+    3. Data Integrity Safeguards
 
-Both agents provide critical safeguards for reliable data input into risk-scoring engines, compliance checks, and workflows.
+    Both agents provide critical safeguards for reliable data input into risk-scoring engines, compliance checks, and workflows.
 
-Slide 14 — Agent E
+    Slide 14 — Agent E
 
-Agent E — Risk Scoring Engine
+    Agent E — Risk Scoring Engine
 
-1. Comprehensive Risk Workflows
+    1. Comprehensive Risk Workflows
 
-Agent E performs clause-by-clause risk scoring by comparing each clause against the standard playbook. The engine applies tolerance thresholds to distinguish minor deviations from material risks that require escalation.
+    Agent E performs clause-by-clause risk scoring by comparing each clause against the standard playbook. The engine applies tolerance thresholds to distinguish minor deviations from material risks that require escalation.
 
-2. Variance and Tolerance Checks
+    2. Variance and Tolerance Checks
 
-The engine applies tolerance thresholds for minor deviations and escalation triggers for material risks requiring legal review.
+    The engine applies tolerance thresholds for minor deviations and escalation triggers for material risks requiring legal review.
 
-3. Handling Multi-jurisdiction Contracts
+    3. Handling Multi-jurisdiction Contracts
 
-Supports cross-border contracts, conflicting governing laws, and multi-party agreements to ensure accurate risk assessments.
+    Supports cross-border contracts, conflicting governing laws, and multi-party agreements to ensure accurate risk assessments.
 
-4. Risk Evidence and Documentation
+    4. Risk Evidence and Documentation
 
-Generates detailed findings, including specific clause text, risk classification, and recommended remediation for each issue.
+    Generates detailed findings, including specific clause text, risk classification, and recommended remediation for each issue.
 
 Slide 15 — Agent H
 
