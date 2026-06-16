@@ -13,6 +13,7 @@ import pymupdf
 
 from schemas.common import EvidencePointer
 from schemas.extracted_clause import (
+    ClauseEvidenceSpan,
     ExtractedClause,
     ExtractedContract,
     ExtractionWarning,
@@ -28,6 +29,7 @@ class ExtractionAgentError(Exception):
 class TextLine:
     """One extracted PDF text line with page-local layout coordinates."""
 
+    page_number: int
     text: str
     bbox: list[float]
     char_start: int
@@ -50,7 +52,20 @@ class ClauseCandidate:
     title: str
     text: str
     page_number: int
+    page_numbers: list[int]
     section_reference: str | None
+    char_start: int | None
+    char_end: int | None
+    bbox: list[float] | None
+    spans: list["CandidateSpan"]
+
+
+@dataclass(frozen=True)
+class CandidateSpan:
+    """Page-local text span for a clause candidate."""
+
+    page_number: int
+    text: str
     char_start: int | None
     char_end: int | None
     bbox: list[float] | None
@@ -72,6 +87,12 @@ CLAUSE_KEYWORDS: dict[str, tuple[str, ...]] = {
 SECTION_PATTERN = re.compile(
     r"^\s*(?P<section>\d+(?:\.\d+)*)[.)]?\s+(?P<title>[A-Z][^\n]{2,})\s*$"
 )
+SCHEDULE_PATTERN = re.compile(
+    r"^\s*(?P<section>(?:schedule|exhibit)\s+[A-Z0-9]+)[\s:.-]*(?P<title>.*)$",
+    re.IGNORECASE,
+)
+PAGE_NUMBER_PATTERN = re.compile(r"^\s*(?:page\s+)?\d+(?:\s+of\s+\d+)?\s*$", re.I)
+LOW_CONFIDENCE_THRESHOLD = 0.75
 
 
 def run_extraction(
@@ -131,7 +152,7 @@ def run_extraction(
     output_path = run_path / "extracted_contract.json"
     _write_model_json(output_path, extracted_contract)
 
-    low_confidence_count = sum(1 for clause in clauses if clause.confidence < 0.75)
+    low_confidence_count = sum(1 for clause in clauses if clause.manual_review_required)
     append_audit_event(
         run_path,
         {
@@ -213,7 +234,7 @@ def _extract_page_texts(contract_path: Path) -> list[PageText]:
     page_texts: list[PageText] = []
     try:
         for index, page in enumerate(pdf, start=1):
-            lines = _extract_text_lines(page)
+            lines = _extract_text_lines(page, index)
             text = "\n".join(line.text for line in lines)
             if lines:
                 page_texts.append(
@@ -222,10 +243,10 @@ def _extract_page_texts(contract_path: Path) -> list[PageText]:
     finally:
         pdf.close()
 
-    return page_texts
+    return _filter_repeated_page_artifacts(page_texts)
 
 
-def _extract_text_lines(page: pymupdf.Page) -> list[TextLine]:
+def _extract_text_lines(page: pymupdf.Page, page_number: int) -> list[TextLine]:
     """Extract text lines with bounding boxes from one PDF page."""
     raw_text = page.get_text("dict")
     blocks = raw_text.get("blocks", [])
@@ -244,7 +265,7 @@ def _extract_text_lines(page: pymupdf.Page) -> list[TextLine]:
         for raw_line in raw_lines:
             if not isinstance(raw_line, Mapping):
                 continue
-            line = _text_line_from_raw(raw_line, offset)
+            line = _text_line_from_raw(raw_line, page_number, offset)
             if line is None:
                 continue
             text_lines.append(line)
@@ -253,7 +274,11 @@ def _extract_text_lines(page: pymupdf.Page) -> list[TextLine]:
     return text_lines
 
 
-def _text_line_from_raw(raw_line: Mapping[str, Any], offset: int) -> TextLine | None:
+def _text_line_from_raw(
+    raw_line: Mapping[str, Any],
+    page_number: int,
+    offset: int,
+) -> TextLine | None:
     """Convert a PyMuPDF raw line dictionary into a TextLine."""
     spans = raw_line.get("spans", [])
     if not isinstance(spans, list):
@@ -280,6 +305,7 @@ def _text_line_from_raw(raw_line: Mapping[str, Any], offset: int) -> TextLine | 
         return None
 
     return TextLine(
+        page_number=page_number,
         text=text,
         bbox=line_bbox,
         char_start=offset,
@@ -287,9 +313,48 @@ def _text_line_from_raw(raw_line: Mapping[str, Any], offset: int) -> TextLine | 
     )
 
 
+def _filter_repeated_page_artifacts(page_texts: list[PageText]) -> list[PageText]:
+    """Remove obvious repeated headers, footers, and standalone page numbers."""
+    repeated_candidates: dict[str, set[int]] = {}
+    for page_text in page_texts:
+        edge_lines = [*page_text.lines[:2], *page_text.lines[-2:]]
+        for line in edge_lines:
+            key = _line_key(line.text)
+            if key:
+                repeated_candidates.setdefault(key, set()).add(page_text.page_number)
+
+    repeated_keys = {
+        key for key, page_numbers in repeated_candidates.items() if len(page_numbers) > 1
+    }
+    filtered_pages: list[PageText] = []
+    for page_text in page_texts:
+        filtered_lines = [
+            line
+            for line in page_text.lines
+            if _line_key(line.text) not in repeated_keys
+            and not PAGE_NUMBER_PATTERN.match(line.text)
+        ]
+        if filtered_lines:
+            filtered_pages.append(
+                PageText(
+                    page_number=page_text.page_number,
+                    text="\n".join(line.text for line in filtered_lines),
+                    lines=filtered_lines,
+                )
+            )
+
+    return filtered_pages
+
+
+def _line_key(text: str) -> str:
+    """Normalize a line for repeated header/footer detection."""
+    return " ".join(text.casefold().split())
+
+
 def _split_into_candidates(page_texts: list[PageText]) -> list[ClauseCandidate]:
     """Split page text into section-like clause candidates."""
     candidates: list[ClauseCandidate] = []
+    active_candidate: ClauseCandidate | None = None
 
     for page_text in page_texts:
         current_title: str | None = None
@@ -298,37 +363,64 @@ def _split_into_candidates(page_texts: list[PageText]) -> list[ClauseCandidate]:
         current_lines: list[TextLine] = []
 
         for text_line in page_text.lines:
-            match = SECTION_PATTERN.match(text_line.text)
-            if match is not None:
-                _append_candidate(
-                    candidates=candidates,
+            heading = _match_heading(text_line.text)
+            if heading is not None:
+                candidate = _append_candidate(
+                    candidates,
                     title=current_title,
                     title_line=current_title_line,
                     section_reference=current_section,
                     lines=current_lines,
                     page_number=page_text.page_number,
                 )
-                current_section = match.group("section")
-                current_title = match.group("title").strip()
+                if candidate is not None:
+                    active_candidate = candidate
+                elif active_candidate is not None and current_lines:
+                    active_candidate = _append_continuation_to_candidate(
+                        candidates,
+                        active_candidate,
+                        current_lines,
+                    )
+                current_section = heading[0]
+                current_title = heading[1]
                 current_title_line = text_line
                 current_lines = []
                 continue
 
-            if current_title is None:
-                current_title = "Contract Text"
-                current_title_line = None
             current_lines.append(text_line)
 
-        _append_candidate(
-            candidates=candidates,
+        candidate = _append_candidate(
+            candidates,
             title=current_title,
             title_line=current_title_line,
             section_reference=current_section,
             lines=current_lines,
             page_number=page_text.page_number,
         )
+        if candidate is not None:
+            active_candidate = candidate
+        elif active_candidate is not None and current_lines:
+            active_candidate = _append_continuation_to_candidate(
+                candidates,
+                active_candidate,
+                current_lines,
+            )
 
     return candidates
+
+
+def _match_heading(text: str) -> tuple[str, str] | None:
+    """Return section reference and title when a line is a clause boundary."""
+    section_match = SECTION_PATTERN.match(text)
+    if section_match is not None:
+        return section_match.group("section"), section_match.group("title").strip()
+
+    schedule_match = SCHEDULE_PATTERN.match(text)
+    if schedule_match is not None:
+        title = schedule_match.group("title").strip() or schedule_match.group("section")
+        return schedule_match.group("section").strip(), title
+
+    return None
 
 
 def _append_candidate(
@@ -338,36 +430,87 @@ def _append_candidate(
     section_reference: str | None,
     lines: list[TextLine],
     page_number: int,
-) -> None:
+) -> ClauseCandidate | None:
     """Append one candidate when it has useful text."""
-    if title is None and not lines:
-        return
+    if title is None:
+        return None
 
     combined_parts = [part for part in [title, *(line.text for line in lines)] if part]
     text = " ".join(" ".join(combined_parts).split())
     if not text:
-        return
+        return None
 
     included_lines = [line for line in [title_line, *lines] if line is not None]
-    if included_lines:
-        char_start = min(line.char_start for line in included_lines)
-        char_end = max(line.char_end for line in included_lines)
-        bbox = _union_bboxes([line.bbox for line in included_lines])
-    else:
-        char_start = None
-        char_end = None
-        bbox = None
+    span = _build_candidate_span(page_number, text, included_lines)
 
-    candidates.append(
-        ClauseCandidate(
-            title=title or "Contract Text",
-            text=text,
+    candidate = ClauseCandidate(
+        title=title or "Contract Text",
+        text=text,
+        page_number=page_number,
+        page_numbers=[page_number],
+        section_reference=section_reference,
+        char_start=span.char_start,
+        char_end=span.char_end,
+        bbox=span.bbox,
+        spans=[span],
+    )
+    candidates.append(candidate)
+    return candidate
+
+
+def _append_continuation_to_candidate(
+    candidates: list[ClauseCandidate],
+    candidate: ClauseCandidate,
+    lines: list[TextLine],
+) -> ClauseCandidate:
+    """Merge page-leading continuation text into the prior candidate."""
+    continuation_text = " ".join(line.text for line in lines)
+    continuation_text = " ".join(continuation_text.split())
+    if not continuation_text:
+        return candidate
+
+    page_number = lines[0].page_number
+    span = _build_candidate_span(page_number, continuation_text, lines)
+    merged_spans = [*candidate.spans, span]
+    page_numbers = sorted({span.page_number for span in merged_spans})
+    merged_text = f"{candidate.text} {continuation_text}".strip()
+    merged_candidate = ClauseCandidate(
+        title=candidate.title,
+        text=merged_text,
+        page_number=candidate.page_number,
+        page_numbers=page_numbers,
+        section_reference=candidate.section_reference,
+        char_start=candidate.char_start,
+        char_end=span.char_end,
+        bbox=candidate.bbox,
+        spans=merged_spans,
+    )
+
+    candidates[candidates.index(candidate)] = merged_candidate
+    return merged_candidate
+
+
+def _build_candidate_span(
+    page_number: int,
+    text: str,
+    lines: list[TextLine],
+) -> CandidateSpan:
+    """Build one page-local span for a clause candidate."""
+    if not lines:
+        return CandidateSpan(
             page_number=page_number,
-            section_reference=section_reference,
-            char_start=char_start,
-            char_end=char_end,
-            bbox=bbox,
+            text=text,
+            char_start=None,
+            char_end=None,
+            bbox=None,
         )
+
+    return CandidateSpan(
+        page_number=page_number,
+        text=text,
+        char_start=min(line.char_start for line in lines),
+        char_end=max(line.char_end for line in lines),
+        bbox=_union_bboxes([line.bbox for line in lines]),
     )
 
 
@@ -400,24 +543,37 @@ def _extract_required_clauses(
             evidence_index=evidence_index,
             primary_document=primary_document,
         )
+        evidence_spans = _build_evidence_spans(
+            candidate=candidate,
+            evidence_index=evidence_index,
+            primary_document=primary_document,
+        )
         confidence = _score_confidence(clause_type, candidate)
+        manual_review_required = confidence < LOW_CONFIDENCE_THRESHOLD
         clauses.append(
             ExtractedClause(
                 clause_id=f"CL-{len(clauses) + 1:03d}",
                 clause_type=clause_type,
                 title=candidate.title,
                 text=candidate.text,
+                clause_text=candidate.text,
                 page_number=candidate.page_number,
+                page_numbers=candidate.page_numbers,
                 section_reference=candidate.section_reference,
                 confidence=confidence,
+                confidence_score=confidence,
                 evidence=evidence,
+                evidence_pointer=evidence,
+                evidence_spans=evidence_spans,
+                manual_review_required=manual_review_required,
                 char_start=candidate.char_start,
                 char_end=candidate.char_end,
                 bbox=candidate.bbox,
+                bounding_box_coordinates=candidate.bbox,
             )
         )
 
-        if confidence < 0.75:
+        if manual_review_required:
             warnings.append(
                 ExtractionWarning(
                     warning_id=f"WARN-{len(warnings) + 1:03d}",
@@ -488,6 +644,30 @@ def _build_evidence_pointer(
         clause_reference=candidate.section_reference,
         excerpt=excerpt,
     )
+
+
+def _build_evidence_spans(
+    candidate: ClauseCandidate,
+    evidence_index: Mapping[str, Any],
+    primary_document: Mapping[str, Any],
+) -> list[ClauseEvidenceSpan]:
+    """Build page-local evidence spans for an extracted clause."""
+    source_file = str(primary_document["relative_path"])
+    document_id = str(primary_document["document_id"])
+
+    return [
+        ClauseEvidenceSpan(
+            page_number=span.page_number,
+            evidence_id=_evidence_id_for_page(evidence_index, span.page_number),
+            document_id=document_id,
+            source_file=source_file,
+            char_start=span.char_start,
+            char_end=span.char_end,
+            bbox=span.bbox,
+            excerpt=_make_excerpt(span.text),
+        )
+        for span in candidate.spans
+    ]
 
 
 def _evidence_id_for_page(

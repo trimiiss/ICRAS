@@ -9,7 +9,12 @@ from schemas.document_inventory import (
     DocumentType,
 )
 from schemas.evidence_index import EvidenceIndex, EvidenceRecord, EvidenceWarning
-from schemas.extracted_clause import ExtractedClause, ExtractedContract, ExtractionWarning
+from schemas.extracted_clause import (
+    ClauseEvidenceSpan,
+    ExtractedClause,
+    ExtractedContract,
+    ExtractionWarning,
+)
 from schemas.finding import Finding
 from schemas.risk_result import RiskResult
 
@@ -24,6 +29,7 @@ __all__ = [
     "EvidenceIndex",
     "EvidenceRecord",
     "EvidenceWarning",
+    "ClauseEvidenceSpan",
     "ExtractedClause",
     "ExtractedContract",
     "ExtractionWarning",

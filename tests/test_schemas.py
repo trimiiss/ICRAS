@@ -125,14 +125,21 @@ class TestExtractedClause:
             clause_type="confidentiality_definition",
             title="Definition of Confidential Information",
             text="Confidential Information means any information...",
+            clause_text="Confidential Information means any information...",
             page_number=2,
+            page_numbers=[2],
             section_reference="1.1",
             confidence=0.92,
+            confidence_score=0.92,
             evidence=_valid_evidence(),
+            evidence_pointer=_valid_evidence(),
+            manual_review_required=False,
         )
         assert clause.clause_id == "C-001"
         assert clause.confidence == 0.92
+        assert clause.confidence_score == 0.92
         assert clause.evidence.source_file == "contract.pdf"
+        assert clause.evidence_pointer.source_file == "contract.pdf"
 
     def test_confidence_out_of_range_fails(self):
         with pytest.raises(ValidationError):
@@ -141,8 +148,11 @@ class TestExtractedClause:
                 clause_type="term",
                 title="Term",
                 text="This agreement shall remain...",
+                clause_text="This agreement shall remain...",
                 confidence=2.0,
+                confidence_score=2.0,
                 evidence=_valid_evidence(),
+                evidence_pointer=_valid_evidence(),
             )
 
     def test_valid_extracted_contract(self):
@@ -156,10 +166,15 @@ class TestExtractedClause:
                     clause_type="confidentiality",
                     title="Confidentiality",
                     text="The receiving party shall protect confidential information.",
+                    clause_text="The receiving party shall protect confidential information.",
                     page_number=1,
+                    page_numbers=[1],
                     section_reference="3",
                     confidence=0.9,
+                    confidence_score=0.9,
                     evidence=_valid_evidence(),
+                    evidence_pointer=_valid_evidence(),
+                    manual_review_required=False,
                 )
             ],
         )
