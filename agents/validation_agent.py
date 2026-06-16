@@ -55,6 +55,26 @@ FIELD_ALIASES: dict[str, tuple[str, ...]] = {
         "term_and_termination",
         "term_and_duration",
     ),
+    "expiry_date": (
+        "expiry_date",
+        "expiration_date",
+        "end_date",
+        "contract_end_date",
+        "term_expiry",
+    ),
+    "liability_cap": (
+        "liability_cap",
+        "limitation_of_liability",
+        "limited_liability",
+        "liability_limit",
+    ),
+    "signature": (
+        "signature",
+        "signatures",
+        "execution",
+        "signatory",
+        "signed",
+    ),
 }
 
 CONTRACT_TYPE_PAYMENT_HINTS: tuple[str, ...] = (
@@ -75,7 +95,26 @@ DEFAULT_FIELD_SEVERITIES: dict[str, Severity] = {
     "governing_law": Severity.HIGH,
     "payment_terms": Severity.HIGH,
     "termination_terms": Severity.MEDIUM,
+    "expiry_date": Severity.HIGH,
+    "liability_cap": Severity.HIGH,
+    "signature": Severity.MEDIUM,
 }
+
+KNOWN_GOVERNING_LAW_JURISDICTIONS: tuple[str, ...] = (
+    "New York",
+    "Delaware",
+    "California",
+    "Texas",
+    "Florida",
+    "England and Wales",
+    "United Kingdom",
+    "Germany",
+    "France",
+    "India",
+    "Singapore",
+    "Netherlands",
+    "Ireland",
+)
 
 DATE_FORMATS: tuple[str, ...] = (
     "%Y-%m-%d",
@@ -103,7 +142,7 @@ DATE_CANDIDATE_PATTERNS: tuple[str, ...] = (
 
 def run_validation(
     context: Dict[str, Any],
-    clauses: List[Dict[str, Any]],
+    clauses: Optional[List[Dict[str, Any]]] = None,
     run_dir: str | Path | None = None,
     evidence_index: Optional[Mapping[str, Any]] = None,
 ) -> Dict[str, Any]:
@@ -112,6 +151,8 @@ def run_validation(
     Args:
         context: Context packet data from the Intake Agent.
         clauses: Extracted clauses available for deterministic validation.
+            When omitted, the agent reads ``extracted_contract.json`` from
+            ``run_dir`` if available.
         run_dir: Optional run directory where ``validation_findings.json`` is written.
         evidence_index: Optional page-level evidence index for source pointers.
 
@@ -122,13 +163,16 @@ def run_validation(
         ValidationAgentError: If inputs are malformed or the artifact cannot be saved.
     """
     run_path = _validate_run_dir(run_dir) if run_dir is not None else None
-    clause_models = _coerce_clauses(clauses)
+    clause_payload = clauses
+    if clause_payload is None or not clause_payload:
+        clause_payload = _read_extracted_contract_clauses(run_path)
+    clause_models = _coerce_clauses(clause_payload)
     evidence_records = _extract_evidence_records(evidence_index)
 
     run_id = str(context.get("run_id") or "unknown-run")
     normalized_fields: dict[str, str] = {}
     validated_fields: list[ValidatedContractField] = []
-    findings: list[Finding] = []
+    findings: list[Finding] = _read_existing_findings(run_path)
 
     _validate_party_names(
         context=context,
@@ -170,6 +214,44 @@ def run_validation(
         validated_fields=validated_fields,
         findings=findings,
     )
+    _validate_liability_cap(
+        context=context,
+        clauses=clause_models,
+        evidence_records=evidence_records,
+        normalized_fields=normalized_fields,
+        validated_fields=validated_fields,
+        findings=findings,
+    )
+    _validate_suspicious_date_ordering(
+        context=context,
+        clauses=clause_models,
+        evidence_records=evidence_records,
+        normalized_fields=normalized_fields,
+        findings=findings,
+    )
+    _validate_governing_law_conflicts(
+        context=context,
+        clauses=clause_models,
+        findings=findings,
+    )
+    _validate_payment_calculations(
+        context=context,
+        clauses=clause_models,
+        findings=findings,
+    )
+    _validate_low_confidence_signatures(
+        context=context,
+        clauses=clause_models,
+        evidence_records=evidence_records,
+        findings=findings,
+    )
+    _validate_multi_party_fields(
+        context=context,
+        clauses=clause_models,
+        evidence_records=evidence_records,
+        findings=findings,
+    )
+    findings = _deduplicate_findings(findings)
 
     validation_result = ValidationResult(
         run_id=run_id,
@@ -541,6 +623,270 @@ def _validate_termination_terms(
     )
 
 
+def _validate_liability_cap(
+    context: Mapping[str, Any],
+    clauses: Sequence[ExtractedClause],
+    evidence_records: Sequence[Mapping[str, Any]],
+    normalized_fields: dict[str, str],
+    validated_fields: list[ValidatedContractField],
+    findings: list[Finding],
+) -> None:
+    """Validate that a required limitation of liability clause is present."""
+    if not _liability_cap_required(context):
+        return
+
+    clause = _find_clause(clauses, FIELD_ALIASES["liability_cap"])
+    if clause is not None:
+        evidence = _field_evidence(context, evidence_records, clause)
+        normalized_fields["liability_cap"] = _truncate(clause.text)
+        validated_fields.append(
+            ValidatedContractField(
+                field_name="liability_cap",
+                is_present=True,
+                normalized_value=_truncate(clause.text),
+                source="clause",
+                evidence=evidence,
+            )
+        )
+        return
+
+    _record_missing_field(
+        field_name="liability_cap",
+        title="Missing liability cap",
+        description=(
+            "The contract does not include a limitation of liability or liability "
+            "cap clause required by approval_policy.yaml."
+        ),
+        context=context,
+        evidence_records=evidence_records,
+        validated_fields=validated_fields,
+        findings=findings,
+    )
+
+
+def _validate_suspicious_date_ordering(
+    context: Mapping[str, Any],
+    clauses: Sequence[ExtractedClause],
+    evidence_records: Sequence[Mapping[str, Any]],
+    normalized_fields: dict[str, str],
+    findings: list[Finding],
+) -> None:
+    """Detect expiry or end dates that occur before the effective date."""
+    effective_date = normalized_fields.get("effective_date")
+    if effective_date is None:
+        effective_date = _normalize_date(
+            _get_raw_context_value(
+                context,
+                ("effective_date", "contract_effective_date", "agreement_date"),
+            )
+        )
+    if effective_date is None:
+        return
+
+    expiry_clause = _find_clause(clauses, FIELD_ALIASES["expiry_date"])
+    expiry_raw = _get_raw_context_value(
+        context,
+        ("expiry_date", "expiration_date", "end_date", "contract_end_date"),
+    )
+    expiry_date = _normalize_date(expiry_raw) if expiry_raw is not None else None
+    if expiry_date is None and expiry_clause is not None:
+        expiry_date = _extract_normalized_date(expiry_clause.text)
+    if expiry_date is None:
+        return
+
+    if expiry_date >= effective_date:
+        normalized_fields["expiry_date"] = expiry_date
+        return
+
+    evidence = _field_evidence(context, evidence_records, expiry_clause)
+    findings.append(
+        _make_finding(
+            field_name="expiry_date",
+            issue_type="suspicious_date_ordering",
+            title="Suspicious date ordering",
+            description=(
+                "The contract expiry date appears before the effective date: "
+                f"expiry_date={expiry_date}, effective_date={effective_date}."
+            ),
+            context=context,
+            evidence=evidence,
+            findings=findings,
+            severity=Severity.HIGH,
+            source_clause_text=_evidence_text(evidence),
+            manual_review_required=True,
+        )
+    )
+
+
+def _validate_governing_law_conflicts(
+    context: Mapping[str, Any],
+    clauses: Sequence[ExtractedClause],
+    findings: list[Finding],
+) -> None:
+    """Detect multiple conflicting governing-law clauses."""
+    governing_clauses = _find_clauses(clauses, FIELD_ALIASES["governing_law"])
+    law_to_clauses: dict[str, list[ExtractedClause]] = {}
+    for clause in governing_clauses:
+        law = _extract_governing_law(clause.text)
+        if law is None:
+            continue
+        law_to_clauses.setdefault(law, []).append(clause)
+
+    if len(law_to_clauses) <= 1:
+        return
+
+    conflict_evidence = [
+        _clause_evidence(context, clause)
+        for clauses_for_law in law_to_clauses.values()
+        for clause in clauses_for_law[:1]
+    ]
+    findings.append(
+        _make_finding(
+            field_name="governing_law",
+            issue_type="conflicting_governing_law",
+            title="Conflicting governing law clauses",
+            description=(
+                "Multiple governing-law jurisdictions were detected: "
+                + ", ".join(sorted(law_to_clauses))
+                + ". Resolve the conflict before risk scoring."
+            ),
+            context=context,
+            evidence=conflict_evidence,
+            findings=findings,
+            severity=Severity.HIGH,
+            source_clause_text=" | ".join(
+                _truncate(clause.text)
+                for clauses_for_law in law_to_clauses.values()
+                for clause in clauses_for_law[:1]
+            ),
+            manual_review_required=True,
+        )
+    )
+
+
+def _validate_payment_calculations(
+    context: Mapping[str, Any],
+    clauses: Sequence[ExtractedClause],
+    findings: list[Finding],
+) -> None:
+    """Detect explicit arithmetic errors in payment or numeric clauses."""
+    calculation_clauses = [
+        clause
+        for clause in clauses
+        if _clause_matches_aliases(clause, FIELD_ALIASES["payment_terms"])
+        or _contains_numeric_calculation(clause.text)
+    ]
+    for clause in calculation_clauses:
+        error = _detect_calculation_error(clause.text)
+        if error is None:
+            continue
+        findings.append(
+            _make_finding(
+                field_name="payment_terms",
+                issue_type="calculation_error",
+                title="Calculation error in contract values",
+                description=error,
+                context=context,
+                evidence=[_clause_evidence(context, clause)],
+                findings=findings,
+                severity=Severity.HIGH,
+                source_clause_text=_truncate(clause.text),
+                manual_review_required=True,
+            )
+        )
+
+
+def _validate_low_confidence_signatures(
+    context: Mapping[str, Any],
+    clauses: Sequence[ExtractedClause],
+    evidence_records: Sequence[Mapping[str, Any]],
+    findings: list[Finding],
+) -> None:
+    """Flag signature or execution sections below the confidence threshold."""
+    threshold = _manual_review_confidence_threshold(context)
+    signature_clauses = _find_clauses(clauses, FIELD_ALIASES["signature"])
+    for clause in signature_clauses:
+        if clause.confidence >= threshold and not clause.manual_review_required:
+            continue
+        findings.append(
+            _make_finding(
+                field_name="signature",
+                issue_type="low_confidence_signature",
+                title="Low-confidence signature section",
+                description=(
+                    "A signature or execution section was extracted below the "
+                    f"manual-review confidence threshold ({clause.confidence:.2f} "
+                    f"< {threshold:.2f})."
+                ),
+                context=context,
+                evidence=_field_evidence(context, evidence_records, clause),
+                findings=findings,
+                severity=Severity.MEDIUM,
+                source_clause_text=_truncate(clause.text),
+                manual_review_required=True,
+            )
+        )
+
+
+def _validate_multi_party_fields(
+    context: Mapping[str, Any],
+    clauses: Sequence[ExtractedClause],
+    evidence_records: Sequence[Mapping[str, Any]],
+    findings: list[Finding],
+) -> None:
+    """Validate signature coverage when more than two parties are detected."""
+    parties = _extract_party_names(context, clauses)
+    if len(parties) <= 2:
+        return
+
+    signature_clauses = _find_clauses(clauses, FIELD_ALIASES["signature"])
+    if not signature_clauses:
+        findings.append(
+            _make_finding(
+                field_name="party_names",
+                issue_type="multi_party_signature_missing",
+                title="Missing multi-party signature section",
+                description=(
+                    f"The contract appears to include {len(parties)} parties, "
+                    "but no signature section was found for validating all parties."
+                ),
+                context=context,
+                evidence=[_fallback_evidence(context, evidence_records)],
+                findings=findings,
+                severity=Severity.HIGH,
+                manual_review_required=True,
+            )
+        )
+        return
+
+    signature_text = " ".join(clause.text for clause in signature_clauses).lower()
+    missing_parties = [
+        party for party in parties if party.lower() not in signature_text
+    ]
+    if not missing_parties:
+        return
+
+    findings.append(
+        _make_finding(
+            field_name="party_names",
+            issue_type="multi_party_signature_incomplete",
+            title="Incomplete multi-party signature coverage",
+            description=(
+                "The contract appears to include more than two parties, but the "
+                "signature section does not reference: "
+                + ", ".join(missing_parties)
+                + "."
+            ),
+            context=context,
+            evidence=[_clause_evidence(context, signature_clauses[0])],
+            findings=findings,
+            severity=Severity.HIGH,
+            source_clause_text=_truncate(signature_clauses[0].text),
+            manual_review_required=True,
+        )
+    )
+
+
 def _record_missing_field(
     field_name: str,
     title: str,
@@ -563,6 +909,7 @@ def _record_missing_field(
     findings.append(
         _make_finding(
             field_name=field_name,
+            issue_type="missing_field",
             title=title,
             description=description,
             context=context,
@@ -595,6 +942,7 @@ def _record_invalid_field(
     findings.append(
         _make_finding(
             field_name=field_name,
+            issue_type="invalid_field",
             title=title,
             description=description,
             context=context,
@@ -641,31 +989,152 @@ def _record_unapproved_payment_terms(
                 "Update the payment clause to use an approved payment term, "
                 "or update approval_policy.yaml if the policy has changed."
             ),
+            field_name="payment_terms",
+            issue_type="payment_terms_policy_violation",
+            message=(
+                "Detected payment terms are not approved by approval_policy.yaml: "
+                + ", ".join(unapproved_terms)
+                + "."
+            ),
+            source_clause_text=payment_text,
+            source_page=_evidence_page(evidence),
+            evidence_pointer=_primary_evidence(evidence),
+            manual_review_required=True,
+            risk_engine_ready=True,
         )
     )
 
 
 def _make_finding(
     field_name: str,
+    issue_type: str,
     title: str,
     description: str,
     context: Mapping[str, Any],
     evidence: Sequence[EvidencePointer],
     findings: Sequence[Finding],
+    severity: Optional[Severity] = None,
+    source_clause_text: Optional[str] = None,
+    manual_review_required: bool = True,
 ) -> Finding:
     """Create a Pydantic finding for a validation issue."""
+    finding_evidence = list(evidence)
     return Finding(
         finding_id=f"VAL-{len(findings) + 1:03d}",
         category="contract_validation",
         title=title,
         description=description,
-        severity=_field_severity(context, field_name),
+        severity=severity or _field_severity(context, field_name),
         confidence=1.0,
-        evidence=list(evidence),
+        evidence=finding_evidence,
         recommendation=(
             f"Add or correct the {field_name.replace('_', ' ')} before approval."
         ),
+        field_name=field_name,
+        issue_type=issue_type,
+        message=description,
+        source_clause_text=source_clause_text or _evidence_text(finding_evidence),
+        source_page=_evidence_page(finding_evidence),
+        evidence_pointer=_primary_evidence(finding_evidence),
+        manual_review_required=manual_review_required,
+        risk_engine_ready=True,
     )
+
+
+def _read_extracted_contract_clauses(run_path: Optional[Path]) -> list[dict[str, Any]]:
+    """Read extracted clauses from run-local extracted_contract.json if present."""
+    if run_path is None:
+        return []
+
+    extracted_path = run_path / "extracted_contract.json"
+    if not extracted_path.exists():
+        return []
+
+    try:
+        with open(extracted_path, "r", encoding="utf-8") as file:
+            payload = json.load(file)
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValidationAgentError(
+            f"Failed to read extracted contract artifact '{extracted_path}': {exc}"
+        ) from exc
+
+    if not isinstance(payload, Mapping):
+        raise ValidationAgentError(
+            f"Expected '{extracted_path}' to contain a JSON object."
+        )
+    raw_clauses = payload.get("clauses", [])
+    if not isinstance(raw_clauses, list):
+        raise ValidationAgentError(
+            f"Expected '{extracted_path}' field 'clauses' to be a list."
+        )
+    return [dict(clause) for clause in raw_clauses if isinstance(clause, Mapping)]
+
+
+def _read_existing_findings(run_path: Optional[Path]) -> list[Finding]:
+    """Read existing validation findings so reruns update instead of discard."""
+    if run_path is None:
+        return []
+
+    validation_path = run_path / "validation_findings.json"
+    if not validation_path.exists():
+        return []
+
+    try:
+        with open(validation_path, "r", encoding="utf-8") as file:
+            payload = json.load(file)
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValidationAgentError(
+            f"Failed to read existing validation artifact '{validation_path}': {exc}"
+        ) from exc
+
+    if not isinstance(payload, Mapping):
+        return []
+    raw_findings = payload.get("findings", [])
+    if not isinstance(raw_findings, list):
+        return []
+
+    findings: list[Finding] = []
+    for index, raw_finding in enumerate(raw_findings):
+        if not isinstance(raw_finding, Mapping):
+            continue
+        try:
+            findings.append(Finding.model_validate(raw_finding))
+        except Exception as exc:
+            raise ValidationAgentError(
+                "Existing validation_findings.json contains an invalid finding at "
+                f"index {index}: {exc}"
+            ) from exc
+    return findings
+
+
+def _deduplicate_findings(findings: Sequence[Finding]) -> list[Finding]:
+    """Remove duplicate findings and reassign deterministic validation IDs."""
+    deduped: list[Finding] = []
+    seen: set[tuple[str, str, str, str]] = set()
+    for finding in findings:
+        primary_evidence = finding.evidence_pointer or _primary_evidence(finding.evidence)
+        evidence_key = ""
+        if primary_evidence is not None:
+            evidence_key = "|".join(
+                [
+                    primary_evidence.source_file,
+                    str(primary_evidence.page_number or ""),
+                    primary_evidence.clause_reference or "",
+                    primary_evidence.excerpt or "",
+                ]
+            )
+        key = (
+            finding.field_name or "",
+            finding.issue_type or finding.title,
+            finding.description,
+            evidence_key,
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        next_id = f"VAL-{len(deduped) + 1:03d}"
+        deduped.append(finding.model_copy(update={"finding_id": next_id}))
+    return deduped
 
 
 def _coerce_clauses(clauses: List[Dict[str, Any]]) -> list[ExtractedClause]:
@@ -780,15 +1249,37 @@ def _find_clause(
     aliases: Sequence[str],
 ) -> Optional[ExtractedClause]:
     """Find the first extracted clause matching any alias."""
+    matching_clauses = _find_clauses(clauses, aliases)
+    return matching_clauses[0] if matching_clauses else None
+
+
+def _find_clauses(
+    clauses: Sequence[ExtractedClause],
+    aliases: Sequence[str],
+) -> list[ExtractedClause]:
+    """Find all extracted clauses matching any alias."""
+    return [
+        clause
+        for clause in clauses
+        if _clause_matches_aliases(clause, aliases)
+    ]
+
+
+def _clause_matches_aliases(
+    clause: ExtractedClause,
+    aliases: Sequence[str],
+) -> bool:
+    """Return whether a clause type, title, or text matches any alias."""
     normalized_aliases = {_normalize_key(alias) for alias in aliases}
-    for clause in clauses:
-        clause_type = _normalize_key(clause.clause_type)
-        title = _normalize_key(clause.title)
-        if clause_type in normalized_aliases or title in normalized_aliases:
-            return clause
-        if any(alias in clause_type or alias in title for alias in normalized_aliases):
-            return clause
-    return None
+    clause_type = _normalize_key(clause.clause_type)
+    title = _normalize_key(clause.title)
+    text = _normalize_key(clause.text)
+    if clause_type in normalized_aliases or title in normalized_aliases:
+        return True
+    return any(
+        alias in clause_type or alias in title or alias in text
+        for alias in normalized_aliases
+    )
 
 
 def _payment_terms_applicable(context: Mapping[str, Any]) -> bool:
@@ -816,12 +1307,58 @@ def _payment_terms_applicable(context: Mapping[str, Any]) -> bool:
     return any(hint in normalized_contract_type for hint in CONTRACT_TYPE_PAYMENT_HINTS)
 
 
+def _liability_cap_required(context: Mapping[str, Any]) -> bool:
+    """Return whether policy or playbook requires a liability cap."""
+    approval_policy = context.get("approval_policy")
+    if isinstance(approval_policy, Mapping):
+        requirements = approval_policy.get("liability_cap_requirements")
+        if isinstance(requirements, Mapping):
+            required = requirements.get("required")
+            if isinstance(required, bool):
+                return required
+
+    playbook = context.get("playbook")
+    if isinstance(playbook, Mapping):
+        required_clauses = playbook.get("required_clauses")
+        if isinstance(required_clauses, list):
+            aliases = {
+                _normalize_key(alias) for alias in FIELD_ALIASES["liability_cap"]
+            }
+            for required_clause in required_clauses:
+                if not isinstance(required_clause, Mapping):
+                    continue
+                clause_type = _normalize_key(str(required_clause.get("clause_type", "")))
+                if clause_type in aliases or any(alias in clause_type for alias in aliases):
+                    return True
+
+    return False
+
+
 def _field_severity(context: Mapping[str, Any], field_name: str) -> Severity:
     """Return the configured or default severity for a missing field."""
+    if field_name == "liability_cap":
+        policy_severity = _liability_cap_missing_severity(context)
+        if policy_severity is not None:
+            return policy_severity
     playbook_severity = _playbook_missing_severity(context, field_name)
     if playbook_severity is not None:
         return playbook_severity
     return DEFAULT_FIELD_SEVERITIES[field_name]
+
+
+def _liability_cap_missing_severity(context: Mapping[str, Any]) -> Optional[Severity]:
+    """Read liability-cap missing severity from approval policy."""
+    approval_policy = context.get("approval_policy")
+    if not isinstance(approval_policy, Mapping):
+        return None
+    requirements = approval_policy.get("liability_cap_requirements")
+    if not isinstance(requirements, Mapping):
+        return None
+    raw_severity = str(requirements.get("severity_if_missing", "")).upper()
+    try:
+        return Severity(raw_severity)
+    except ValueError:
+        return None
 
 
 def _playbook_missing_severity(
@@ -920,6 +1457,176 @@ def _canonical_payment_term(raw_term: str) -> Optional[str]:
     return f"net-{int(match.group(1))}"
 
 
+def _manual_review_confidence_threshold(context: Mapping[str, Any]) -> float:
+    """Return the configured confidence threshold for manual review."""
+    approval_policy = context.get("approval_policy")
+    if not isinstance(approval_policy, Mapping):
+        return 0.75
+    threshold = approval_policy.get("manual_review_confidence_threshold", 0.75)
+    try:
+        numeric_threshold = float(threshold)
+    except (TypeError, ValueError):
+        return 0.75
+    return min(max(numeric_threshold, 0.0), 1.0)
+
+
+def _extract_governing_law(text: str) -> Optional[str]:
+    """Extract a known governing-law jurisdiction from clause text."""
+    compact_text = " ".join(text.split())
+    for jurisdiction in KNOWN_GOVERNING_LAW_JURISDICTIONS:
+        if re.search(rf"\b{re.escape(jurisdiction)}\b", compact_text, re.IGNORECASE):
+            return jurisdiction.lower()
+
+    patterns = (
+        r"laws?\s+of\s+([A-Z][A-Za-z .&-]+?)(?:,|\.|;|\s+and\s+|$)",
+        r"governed\s+by\s+([A-Z][A-Za-z .&-]+?)\s+law",
+        r"jurisdiction\s+of\s+([A-Z][A-Za-z .&-]+?)(?:,|\.|;|$)",
+    )
+    for pattern in patterns:
+        match = re.search(pattern, compact_text)
+        if match is None:
+            continue
+        return _normalize_governing_law(match.group(1))
+    return None
+
+
+def _normalize_governing_law(value: str) -> str:
+    """Return a compact comparable governing-law value."""
+    cleaned = re.sub(
+        r"\b(usa|u\.s\.a\.|united states|state of|laws of|the)\b",
+        "",
+        value,
+        flags=re.IGNORECASE,
+    )
+    return " ".join(cleaned.replace(",", " ").split()).lower()
+
+
+def _contains_numeric_calculation(text: str) -> bool:
+    """Return whether text contains an explicit arithmetic expression."""
+    return bool(
+        re.search(
+            r"\d[\d,]*(?:\.\d+)?\s*(?:x|\*|\+|times|plus)\s*\d",
+            text,
+            re.IGNORECASE,
+        )
+        or re.search(r"\btotal(?:s|ing)?\b", text, re.IGNORECASE)
+    )
+
+
+def _detect_calculation_error(text: str) -> Optional[str]:
+    """Detect simple multiplication or addition errors in contract text."""
+    compact_text = " ".join(text.split())
+    multiplication_patterns = (
+        r"(?P<a>\d[\d,]*(?:\.\d+)?)\s*(?:x|\*|times)\s*"
+        r"(?P<b>\d[\d,]*(?:\.\d+)?)\s*(?:=|equals|total(?:s|ing)?(?:\s+(?:of|to))?)"
+        r"\s*\$?(?P<c>\d[\d,]*(?:\.\d+)?)",
+        r"monthly\s+fee\s+of\s+\$?(?P<a>\d[\d,]*(?:\.\d+)?)\s+for\s+"
+        r"(?P<b>\d[\d,]*(?:\.\d+)?)\s+months?.*?"
+        r"(?:total(?:s|ing)?(?:\s+(?:of|to))?)\s+\$?(?P<c>\d[\d,]*(?:\.\d+)?)",
+    )
+    for pattern in multiplication_patterns:
+        match = re.search(pattern, compact_text, re.IGNORECASE)
+        if match is None:
+            continue
+        left = _parse_decimal(match.group("a"))
+        right = _parse_decimal(match.group("b"))
+        stated = _parse_decimal(match.group("c"))
+        if left is None or right is None or stated is None:
+            continue
+        expected = left * right
+        if not _amounts_close(expected, stated):
+            return (
+                f"Detected calculation mismatch: {left:g} x {right:g} should equal "
+                f"{expected:g}, but the clause states {stated:g}."
+            )
+
+    addition_pattern = (
+        r"(?P<a>\d[\d,]*(?:\.\d+)?)\s*(?:\+|plus)\s*"
+        r"(?P<b>\d[\d,]*(?:\.\d+)?)\s*(?:=|equals|total(?:s|ing)?(?:\s+(?:of|to))?)"
+        r"\s*\$?(?P<c>\d[\d,]*(?:\.\d+)?)"
+    )
+    match = re.search(addition_pattern, compact_text, re.IGNORECASE)
+    if match is None:
+        return None
+    left = _parse_decimal(match.group("a"))
+    right = _parse_decimal(match.group("b"))
+    stated = _parse_decimal(match.group("c"))
+    if left is None or right is None or stated is None:
+        return None
+    expected = left + right
+    if _amounts_close(expected, stated):
+        return None
+    return (
+        f"Detected calculation mismatch: {left:g} + {right:g} should equal "
+        f"{expected:g}, but the clause states {stated:g}."
+    )
+
+
+def _parse_decimal(raw_value: str) -> Optional[float]:
+    """Parse a numeric contract value."""
+    try:
+        return float(raw_value.replace(",", ""))
+    except ValueError:
+        return None
+
+
+def _amounts_close(left: float, right: float) -> bool:
+    """Return whether two amounts are effectively equal for validation."""
+    return abs(left - right) <= 0.01
+
+
+def _extract_party_names(
+    context: Mapping[str, Any],
+    clauses: Sequence[ExtractedClause],
+) -> list[str]:
+    """Extract likely party names from context and party clauses."""
+    parties: list[str] = []
+    raw_parties = _get_raw_context_value(context, ("party_names", "parties"))
+    if isinstance(raw_parties, Sequence) and not isinstance(raw_parties, (str, bytes)):
+        parties.extend(str(party).strip() for party in raw_parties if _is_non_empty(party))
+    elif isinstance(raw_parties, Mapping):
+        parties.extend(str(value).strip() for value in raw_parties.values() if _is_non_empty(value))
+    elif _is_non_empty(raw_parties):
+        parties.extend(_split_party_text(str(raw_parties)))
+
+    party_clause = _find_clause(clauses, FIELD_ALIASES["party_names"])
+    if party_clause is not None:
+        parties.extend(_split_party_text(party_clause.text))
+
+    unique_parties: list[str] = []
+    for party in parties:
+        cleaned_party = _clean_party_name(party)
+        if not cleaned_party or cleaned_party.lower() in {p.lower() for p in unique_parties}:
+            continue
+        unique_parties.append(cleaned_party)
+    return unique_parties
+
+
+def _split_party_text(text: str) -> list[str]:
+    """Split common party-list language into likely legal names."""
+    match = re.search(
+        r"(?:between|among)\s+(.+?)(?:\.|,?\s+each\s+a\s+|,?\s+collectively\s+)",
+        text,
+        re.IGNORECASE,
+    )
+    party_text = match.group(1) if match is not None else text
+    party_text = re.sub(r"\s+\([^)]*\)", "", party_text)
+    return [
+        item
+        for item in re.split(r"\s*,\s*|\s+and\s+|\s+&\s+", party_text)
+        if _is_non_empty(item)
+    ]
+
+
+def _clean_party_name(value: str) -> str:
+    """Normalize a likely party name for comparison."""
+    cleaned = value.strip(" .;:")
+    cleaned = re.sub(r"^(this agreement is|by and between)\s+", "", cleaned, flags=re.IGNORECASE)
+    if len(cleaned) < 3:
+        return ""
+    return cleaned
+
+
 def _field_evidence(
     context: Mapping[str, Any],
     evidence_records: Sequence[Mapping[str, Any]],
@@ -929,6 +1636,29 @@ def _field_evidence(
     if clause is not None:
         return [_clause_evidence(context, clause)]
     return [_fallback_evidence(context, evidence_records)]
+
+
+def _primary_evidence(
+    evidence: Sequence[EvidencePointer],
+) -> Optional[EvidencePointer]:
+    """Return the primary evidence pointer for finding compatibility fields."""
+    return evidence[0] if evidence else None
+
+
+def _evidence_text(evidence: Sequence[EvidencePointer]) -> Optional[str]:
+    """Return the best evidence excerpt for source_clause_text."""
+    primary = _primary_evidence(evidence)
+    if primary is None:
+        return None
+    return primary.excerpt
+
+
+def _evidence_page(evidence: Sequence[EvidencePointer]) -> Optional[int]:
+    """Return the primary evidence page number."""
+    primary = _primary_evidence(evidence)
+    if primary is None:
+        return None
+    return primary.page_number
 
 
 def _clause_evidence(

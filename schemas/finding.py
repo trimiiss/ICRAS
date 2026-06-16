@@ -35,6 +35,38 @@ class Finding(BaseModel):
         default=None,
         description="Suggested action to address this finding.",
     )
+    field_name: Optional[str] = Field(
+        default=None,
+        description="Contract field related to this finding, when applicable.",
+    )
+    issue_type: Optional[str] = Field(
+        default=None,
+        description="Machine-readable validation issue type.",
+    )
+    message: Optional[str] = Field(
+        default=None,
+        description="Agent-facing finding message for downstream consumers.",
+    )
+    source_clause_text: Optional[str] = Field(
+        default=None,
+        description="Source clause text or excerpt supporting this finding.",
+    )
+    source_page: Optional[int] = Field(
+        default=None,
+        description="Source page for the finding evidence, when available.",
+    )
+    evidence_pointer: Optional[EvidencePointer] = Field(
+        default=None,
+        description="Primary evidence pointer for Agent E risk scoring.",
+    )
+    manual_review_required: bool = Field(
+        default=False,
+        description="Whether this finding must be reviewed by a human.",
+    )
+    risk_engine_ready: bool = Field(
+        default=False,
+        description="Whether this finding is ready for risk scoring.",
+    )
 
     @model_validator(mode="after")
     def _require_at_least_one_evidence(self) -> "Finding":
