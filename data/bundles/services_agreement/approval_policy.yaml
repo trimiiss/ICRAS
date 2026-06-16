@@ -30,3 +30,40 @@ escalation_rules:
   - condition: cross_border_data_transfer
     action: add_approver
     approver: compliance_officer
+
+approved_payment_terms:
+  terms:
+    - net-30
+  severity_if_unapproved: HIGH
+
+signing_authority_thresholds:
+  thresholds_usd:
+    vp_engineering: 250000
+    cfo: 500000
+    cto: 1000000
+
+liability_cap_requirements:
+  required: true
+  minimum_cap: fees_paid_12_months
+  severity_if_missing: HIGH
+
+auto_renewal_rules:
+  allowed: false
+  minimum_notice_days: 30
+  severity_if_unapproved: MEDIUM
+
+high_risk_jurisdictions:
+  - Russia
+  - Iran
+  - North Korea
+  - Syria
+
+gdpr_requirements:
+  applies_when_personal_data: true
+  required_clauses:
+    - data_processing_terms
+    - cross_border_transfer_controls
+    - data_subject_rights
+  severity_if_missing: CRITICAL
+
+manual_review_confidence_threshold: 0.75

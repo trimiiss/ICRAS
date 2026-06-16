@@ -192,7 +192,7 @@ def _default_config(bundle_path: str) -> Dict[str, Any]:
             "risk",
         ],
         "settings": {
-            "confidence_threshold": 0.7,
+            "manual_review_confidence_threshold": 0.75,
             "require_human_review_above": "HIGH",
         },
     }

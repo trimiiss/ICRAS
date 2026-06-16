@@ -118,6 +118,32 @@ pytest -v
 
 ---
 
+## Configurable Policy Rules
+
+Contract policy thresholds live in each bundle's `approval_policy.yaml`.
+For example, change:
+
+```yaml
+approved_payment_terms:
+  terms:
+    - net-30
+```
+
+to:
+
+```yaml
+approved_payment_terms:
+  terms:
+    - net-60
+```
+
+The next bundle load uses the edited YAML without Python code changes. The test
+`tests/test_policy_rules.py::test_policy_yaml_edit_changes_payment_terms_decision`
+demonstrates the visible decision change: a net-60 payment clause is flagged
+under net-30 policy and accepted after the YAML is changed to net-60.
+
+---
+
 ## Key Concepts
 
 | Concept | Description |

@@ -431,20 +431,27 @@ def _validate_payment_terms(
     evidence = _field_evidence(context, evidence_records, clause)
 
     if context_value:
-        normalized_fields["payment_terms"] = context_value
+        normalized_value = _normalize_payment_terms_value(context_value)
+        normalized_fields["payment_terms"] = normalized_value
         validated_fields.append(
             ValidatedContractField(
                 field_name="payment_terms",
                 is_present=True,
-                normalized_value=context_value,
+                normalized_value=normalized_value,
                 source="context",
                 evidence=evidence,
             )
         )
+        _record_unapproved_payment_terms(
+            payment_text=context_value,
+            context=context,
+            evidence=evidence,
+            findings=findings,
+        )
         return
 
     if clause is not None:
-        normalized_value = _truncate(clause.text)
+        normalized_value = _normalize_payment_terms_value(clause.text)
         normalized_fields["payment_terms"] = normalized_value
         validated_fields.append(
             ValidatedContractField(
@@ -454,6 +461,12 @@ def _validate_payment_terms(
                 source="clause",
                 evidence=evidence,
             )
+        )
+        _record_unapproved_payment_terms(
+            payment_text=clause.text,
+            context=context,
+            evidence=evidence,
+            findings=findings,
         )
         return
 
@@ -587,6 +600,47 @@ def _record_invalid_field(
             context=context,
             evidence=evidence,
             findings=findings,
+        )
+    )
+
+
+def _record_unapproved_payment_terms(
+    payment_text: str,
+    context: Mapping[str, Any],
+    evidence: Sequence[EvidencePointer],
+    findings: list[Finding],
+) -> None:
+    """Create a finding when detected payment terms are outside YAML policy."""
+    detected_terms = _extract_payment_terms(payment_text)
+    if not detected_terms:
+        return
+
+    approved_terms = _approved_payment_terms(context)
+    unapproved_terms = [
+        term for term in detected_terms if term not in approved_terms
+    ]
+    if not unapproved_terms:
+        return
+
+    findings.append(
+        Finding(
+            finding_id=f"VAL-{len(findings) + 1:03d}",
+            category="contract_validation",
+            title="Unapproved payment terms",
+            description=(
+                "Detected payment terms are not approved by approval_policy.yaml: "
+                + ", ".join(unapproved_terms)
+                + ". Approved terms are: "
+                + ", ".join(sorted(approved_terms))
+                + "."
+            ),
+            severity=_payment_policy_severity(context),
+            confidence=1.0,
+            evidence=list(evidence),
+            recommendation=(
+                "Update the payment clause to use an approved payment term, "
+                "or update approval_policy.yaml if the policy has changed."
+            ),
         )
     )
 
@@ -797,6 +851,73 @@ def _playbook_missing_severity(
             continue
 
     return None
+
+
+def _approved_payment_terms(context: Mapping[str, Any]) -> set[str]:
+    """Return approved payment terms from approval_policy.yaml rules."""
+    approval_policy = context.get("approval_policy")
+    if not isinstance(approval_policy, Mapping):
+        return {"net-30"}
+
+    approved_payment_terms = approval_policy.get("approved_payment_terms")
+    if not isinstance(approved_payment_terms, Mapping):
+        return {"net-30"}
+
+    terms = approved_payment_terms.get("terms")
+    if not isinstance(terms, list):
+        return {"net-30"}
+
+    normalized_terms = {
+        normalized
+        for term in terms
+        if (normalized := _canonical_payment_term(str(term))) is not None
+    }
+    return normalized_terms or {"net-30"}
+
+
+def _payment_policy_severity(context: Mapping[str, Any]) -> Severity:
+    """Return YAML-configured severity for unapproved payment terms."""
+    approval_policy = context.get("approval_policy")
+    if not isinstance(approval_policy, Mapping):
+        return Severity.HIGH
+
+    approved_payment_terms = approval_policy.get("approved_payment_terms")
+    if not isinstance(approved_payment_terms, Mapping):
+        return Severity.HIGH
+
+    raw_severity = str(
+        approved_payment_terms.get("severity_if_unapproved", Severity.HIGH.value)
+    ).upper()
+    try:
+        return Severity(raw_severity)
+    except ValueError:
+        return Severity.HIGH
+
+
+def _normalize_payment_terms_value(payment_text: str) -> str:
+    """Return detected canonical payment terms or a compact clause excerpt."""
+    detected_terms = _extract_payment_terms(payment_text)
+    if detected_terms:
+        return "; ".join(detected_terms)
+    return _truncate(payment_text)
+
+
+def _extract_payment_terms(payment_text: str) -> list[str]:
+    """Extract canonical net payment terms from text."""
+    found_terms: list[str] = []
+    for match in re.finditer(r"\bnet[\s-]?(\d{1,3})\b", payment_text, re.IGNORECASE):
+        term = f"net-{int(match.group(1))}"
+        if term not in found_terms:
+            found_terms.append(term)
+    return found_terms
+
+
+def _canonical_payment_term(raw_term: str) -> Optional[str]:
+    """Normalize a configured payment term such as net 30 into net-30."""
+    match = re.fullmatch(r"\s*net[\s-]?(\d{1,3})\s*", raw_term, re.IGNORECASE)
+    if match is None:
+        return None
+    return f"net-{int(match.group(1))}"
 
 
 def _field_evidence(
