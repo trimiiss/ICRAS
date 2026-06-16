@@ -187,10 +187,21 @@ def _default_config(bundle_path: str) -> Dict[str, Any]:
         "bundle_path": str(Path(bundle_path).resolve()),
         "agents": [
             "intake",
+            "evidence_index",
             "extraction",
             "counterparty",
             "validation",
             "risk",
+            "orchestrator",
+        ],
+        "orchestration": "langgraph",
+        "pipeline_order": [
+            "intake",
+            "evidence_index",
+            "extraction",
+            "counterparty_and_validation",
+            "risk",
+            "orchestrator",
         ],
         "settings": {
             "manual_review_confidence_threshold": 0.75,
