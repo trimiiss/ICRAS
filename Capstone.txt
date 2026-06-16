@@ -1,0 +1,364 @@
+Slide 1 — Title Slide
+
+Intelligent Contract Review & Risk Analysis System (ICRAS)
+
+Capstone Project Proposal
+
+Slide 2 — Agenda
+
+Agenda
+
+Intelligent Contract Review Overview
+Architecture Overview
+Agent Specifications
+Schemas & Policies
+Execution Roadmap & Scenario
+Demo & Work Structure
+Slide 3 — Section Divider
+
+Intelligent Contract Review Overview
+
+Part One
+
+Slide 4 — Overview
+
+Overview
+
+Multi-agent Contract Pipeline
+
+The system uses a multi-agent pipeline to automate contract review, risk scoring, and approval routing within legal and procurement workflows.
+
+Layered Risk Intelligence
+
+Clause analysis identifies non-standard terms, missing provisions, one-sided indemnities, and high-risk payment structures across all contract types.
+
+Audit Trail & Compliance
+
+The system builds a transparent audit trail, ensuring traceability and compliance for every contract review decision and approval.
+
+CLM-ready Output Formats
+
+Final outputs include CLM-ready posting payloads and human-readable summaries in JSON, CSV, and Markdown formats.
+
+Slide 5 — Project Deliverables
+
+Project Deliverables
+
+A working prototype that:
+Takes contract input as either:
+A single contract PDF, or
+A Contract Bundle containing contracts, standard playbooks, approval policies, a vendor master, and jurisdiction rule files.
+Runs a 6-agent contract pipeline:
+Agent A: Intake and classification
+Agent B: Clause extraction from clean or born-digital PDFs, with a synthetic-data fallback
+Agents C & D: Field validation and counterparty normalization
+Agent E: Clause-by-clause risk scoring against the playbook
+Agent H: Exception triage, approval routing, and CLM payload generation
+Produces run artifacts:
+extracted_contract.json — structured clauses and confidence scores
+clause_analysis.json — risk scores per clause
+obligations.csv — obligation register
+exceptions.md — exception summary and next actions
+approval_packet.json — who approves, why approval is required, and supporting evidence
+posting_payload.json — CLM-ready payload
+audit_log.md — step-by-step trace and evidence
+metrics.json — throughput, extraction accuracy, and exception rates
+Stretch goals
+Add a standalone Compliance Agent for GDPR and jurisdiction rules.
+Add a Conflict and Anomaly Agent as a separate eighth agent.
+Support real ingestion from a contract inbox or API stub.
+Add OCR support for scanned or low-quality PDFs.
+Support idempotent re-runs and posting results back to a tracker such as Jira or Azure DevOps.
+Slide 6 — Success Criteria
+
+Success Criteria
+
+Extraction Accuracy
+
+Measures how effectively the extraction engine captures structured contract data for improved processing accuracy.
+
+Matching Precision
+
+Ensures high precision when matching counterparties, contract details, and reference data for operational reliability.
+
+Deterministic Outputs
+
+Re-running the system with identical inputs produces consistent results, ensuring reliability and predictability.
+
+Auditability and Traceability
+
+Supports evidence-first processing with detailed pointers, thorough audit trails, and end-to-end traceability.
+
+Slide 7 — Section Divider
+
+Architecture Overview
+
+Part Two
+
+Slide 8 — High-Level Architecture Diagram
+
+High-Level Architecture Diagram
+
+Data Intake and Context Building
+
+Initial processing collects metadata such as counterparty details, contract types, and jurisdiction references to establish context for downstream agents.
+
+Extraction and Transformation
+
+Extraction agents convert unstructured contracts into structured JSON and CSV formats with evidence pointers.
+
+Validation and Matching
+
+Validation checks consistency and mandatory fields, while matching agents compare counterparty information with reference data.
+
+Orchestration and Artifact Storage
+
+The lead agent aggregates findings, applies rules, and stores artifacts for auditing, testing, and re-execution.
+
+Slide 9 — Coordination Model
+
+Coordination Model
+
+Deterministic File-Based Model
+
+Agents read from context files and write structured outputs, ensuring predictable behavior and simplified debugging.
+
+Shared Run Directory
+
+A central repository contains context packets, findings, exceptions, logs, and decision files for traceability.
+
+Agent Independence and Flexibility
+
+Agents operate independently, enabling re-runs, modular substitution, and data-driven scenarios.
+
+Traceability and Experimentation
+
+Complete traceability and reproducibility allow rapid experimentation and flexible test-case definitions.
+
+Slide 10 — Section Divider
+
+Agent Specifications
+
+Part Three
+
+Slide 11 — Agent A
+
+Agent A — Intake & Context Agent (Gatekeeper)
+
+1. Contract Processing Gateway
+
+Agent A loads diverse contract formats and classifies document types to initiate processing workflows efficiently.
+
+2. Context Packet Construction
+
+Aggregates metadata, risk indicators, counterparty candidates, and jurisdiction references into a comprehensive context packet.
+
+3. Universal Evidence Index
+
+Generates an evidence index linking each finding to exact clause locations in the source documents for downstream agents.
+
+4. Risk Detection & Filtering
+
+Applies heuristics to detect risks such as new counterparties, missing mandatory clauses, and high-risk jurisdictions. It also filters ignored files.
+
+Slide 12 — Agent B
+
+Agent B — OCR & Clause Extraction Agent
+
+1. Structured Clause Extraction
+
+Agent B converts unstructured contract documents into structured, machine-readable formats for efficient clause-level processing.
+
+2. Confidence Scoring & Validation
+
+The system flags low-confidence extractions for manual review or further validation to ensure clause accuracy.
+
+3. Bounding Box Coordinates
+
+Bounding box coordinates are stored for each extracted clause to enable traceability and evidence verification in the audit log.
+
+4. Robust Multi-page Aggregation
+
+The extraction module aggregates data across multi-page contracts, ensuring consistency across headers, schedules, and exhibits.
+
+Slide 13 — Agents C & D
+
+Agents C & D — Counterparty Resolution & Validation
+
+1. Counterparty Identity Resolution
+
+Agent C uses fuzzy matching on counterparty data to identify discrepancies and flag high-risk changes for anomaly detection.
+
+2. Contract Field Validation
+
+Agent D ensures contract accuracy by verifying mandatory fields, normalizing date formats, and detecting calculation errors.
+
+3. Data Integrity Safeguards
+
+Both agents provide critical safeguards for reliable data input into risk-scoring engines, compliance checks, and workflows.
+
+Slide 14 — Agent E
+
+Agent E — Risk Scoring Engine
+
+1. Comprehensive Risk Workflows
+
+Agent E performs clause-by-clause risk scoring by comparing each clause against the standard playbook. The engine applies tolerance thresholds to distinguish minor deviations from material risks that require escalation.
+
+2. Variance and Tolerance Checks
+
+The engine applies tolerance thresholds for minor deviations and escalation triggers for material risks requiring legal review.
+
+3. Handling Multi-jurisdiction Contracts
+
+Supports cross-border contracts, conflicting governing laws, and multi-party agreements to ensure accurate risk assessments.
+
+4. Risk Evidence and Documentation
+
+Generates detailed findings, including specific clause text, risk classification, and recommended remediation for each issue.
+
+Slide 15 — Agent H
+
+Agent H — Exception Triage & Lead Orchestration
+
+1. Exception Categorization
+
+Agent H consolidates findings into actionable exception categories and creates approval packets with routing and follow-up details.
+
+2. Lead Orchestrator — Orchestrator and Judge
+
+Agent H merges, deduplicates, and prioritizes findings. It applies rule-based logic to determine the appropriate contract-processing actions.
+
+3. Idempotency and Audit Readiness
+
+Consistent decisions across repeated runs ensure audit readiness while maintaining system reliability and compliance.
+
+Slide 16 — Section Divider
+
+Schemas & Policies
+
+Part Four
+
+Slide 17 — Findings Schema
+
+Findings Schema
+
+Unified JSON Schema
+
+A standardized JSON schema consolidates findings with identifiers, severity levels, confidence scores, and evidence links.
+
+Traceable Evidence
+
+Mandatory evidence pointers allow auditors to trace conclusions back to the original sources easily.
+
+Human Oversight Integration
+
+Recommendations and open questions in the schema encourage human review when automation lacks full certainty.
+
+Analytics and Compliance
+
+The schema supports downstream analytics and integrates with auditing, review workflows, and compliance modules.
+
+Slide 18 — Policy Pack
+
+Policy Pack
+
+Operational Constraints and Rules
+
+Defines approval thresholds, tolerance percentages, compliance requirements, and privacy rules that guide system behavior.
+
+Dynamic Reconfiguration
+
+Uses YAML to enable policy changes without code edits, allowing flexible runtime adjustments.
+
+Scenario Testing and Adaptability
+
+Supports testing different conditions by modifying tolerances and thresholds for tailored workflows.
+
+Regional Compliance Customization
+
+Policies can be customized to meet specific regional compliance requirements and organizational workflow needs.
+
+Slide 19 — Section Divider
+
+Execution Roadmap & Scenario
+
+Part Five
+
+Slide 20 — Plan to End of June
+
+Plan to End of June — Approximately 3 Weeks
+
+Week 1: Foundations
+Set up the repository and Contract Bundle format using a folder and manifest.yaml.
+Define schemas for context, extracted contracts, clause findings, risk_result, and final decisions.
+Implement the Intake and Context Agent with run scaffolding using the runs/ directory.
+Add baseline contract parsing and evidence indexing.
+Week 1–2: Extraction — Clean PDFs and Synthetic Data
+Implement the Clause Extraction Agent for clean or born-digital PDFs.
+Add a synthetic-data fallback and confidence scoring.
+Implement the Validation and Normalization Agent for date formats and field-completeness checks.
+Produce consistent findings outputs and begin generating metrics.json.
+Week 2: Risk Scoring and Core Rules
+Implement the clause-by-clause Risk Scoring Agent with tolerance thresholds.
+Implement the Counterparty Resolution Agent using fuzzy matching and risk flags.
+Stretch goal: Add a separate Compliance Agent with a jurisdiction rule library.
+Week 3: Orchestration and Triage
+Implement the first version of the Lead Orchestrator to merge, deduplicate, and generate preliminary decisions.
+Implement the Exception Triage Agent to create exceptions.md and approval_packet.json.
+Stretch goal: Add a separate Conflict and Anomaly Agent for contradiction detection.
+Week 3: Integration and Demo — By June 30
+Finalize the Lead Orchestrator with conflict resolution, ranking, and a polished audit_log.md.
+Add a test suite containing 8–10 contract bundles.
+Optionally map posting_payload.json to a target CLM schema or a mock integration.
+Prepare a one-command demo run with deterministic outputs.
+
+
+
+
+Slide 21: Test Contract Bundle Scenarios
+Clean NDA with standard terms and within signing authority — auto-approve.
+
+Missing liability cap clause — flag for legal review and escalation.
+
+Payment terms exceed company policy (net 90 vs net 30) — exception routing.
+
+Jurisdiction = high-risk country — escalate to compliance for assessment.
+
+Auto-renewal clause with no opt-out window — material risk exception.
+
+Conflicting governing law clauses on the same page — conflict detection.
+
+Low OCR confidence on signature block — route for manual review.
+
+GDPR data processing obligations clause missing — compliance exception.
+
+Clean standard services agreement under threshold — minimal noise, auto-approve.
+
+Slide 22: Demo & Work Structure
+Demo & Work Structure
+
+Part Six
+
+Slide 23: Demo Expectations
+Core System Strengths
+Highlight automated extraction, deterministic matching, and intelligent routing in the demo to showcase system capabilities.
+
+Invoice Handling Scenarios
+Demonstrate handling clean invoices, variance approvals, and anomaly investigations to cover typical invoice cases.
+
+Run Artifacts and Evidence
+Display posting payloads and detailed audit logs highlighting evidence pointers and policy-driven logic.
+
+Configurability and Robustness
+Show how adjusting tolerance or policy settings visibly changes system decisions to demonstrate flexibility.
+
+Slide 24: Suggested Intern Workload Split (not mandatory)
+Platform Foundations Management
+Intern 1 oversees ingestion, context generation, orchestration, API scaffolding, and schema validation, ensuring solid platform infrastructure.
+
+Extraction and Matching Specialization
+Intern 2 focuses on OCR tuning, data normalization, and advanced multi-level matching algorithms for accurate data extraction.
+
+Compliance and Risk Analysis
+Intern 3 handles compliance, risk assessment, exception routing, and orchestrator decision logic to ensure system reliability.
