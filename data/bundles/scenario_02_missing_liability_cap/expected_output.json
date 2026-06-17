@@ -1,0 +1,8 @@
+{
+  "expected_approval_status": "ESCALATE",
+  "expected_approver": "legal_counsel",
+  "expected_exception_category": "LEGAL",
+  "expected_issue_type": "missing_liability_cap",
+  "scenario_id": 2,
+  "scenario_name": "Missing liability-cap clause"
+}

@@ -1,0 +1,8 @@
+{
+  "expected_approval_status": "ESCALATE",
+  "expected_approver": "compliance_officer",
+  "expected_exception_category": "COMPLIANCE",
+  "expected_issue_type": "high_risk_jurisdiction",
+  "scenario_id": 4,
+  "scenario_name": "High-risk jurisdiction"
+}

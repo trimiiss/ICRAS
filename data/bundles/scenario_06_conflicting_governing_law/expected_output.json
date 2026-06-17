@@ -1,0 +1,8 @@
+{
+  "expected_approval_status": "ESCALATE",
+  "expected_approver": "legal_counsel",
+  "expected_exception_category": "LEGAL",
+  "expected_issue_type": "multi_jurisdiction_conflict",
+  "scenario_id": 6,
+  "scenario_name": "Conflicting governing-law clauses"
+}

@@ -1,0 +1,8 @@
+jurisdiction: Delaware, USA
+governing_law:
+  state: Delaware
+  country: USA
+regulatory_requirements: []
+statute_of_limitations_years: 3
+enforceability_notes:
+- Representative demo scenario fixture.

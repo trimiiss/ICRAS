@@ -1,0 +1,7 @@
+bundle_name: scenario_02_missing_liability_cap
+contract_file: contract.pdf
+contract_type: Non-Disclosure Agreement
+counterparty: Acme Corporation
+jurisdiction: Delaware, USA
+effective_date: '2025-01-15'
+description: NDA missing the liability-cap clause.

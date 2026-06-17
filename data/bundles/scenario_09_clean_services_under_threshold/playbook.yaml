@@ -1,0 +1,18 @@
+contract_type: Master Services Agreement
+required_clauses:
+- clause_type: payment_terms
+  description: Payment terms required.
+  severity_if_missing: HIGH
+- clause_type: liability_cap
+  description: Liability cap required.
+  severity_if_missing: HIGH
+- clause_type: termination
+  description: Termination rights required.
+  severity_if_missing: MEDIUM
+- clause_type: data_protection
+  description: Data protection terms required.
+  severity_if_missing: HIGH
+- clause_type: governing_law
+  description: Governing law required.
+  severity_if_missing: HIGH
+prohibited_clauses: []

@@ -1,0 +1,8 @@
+{
+  "expected_approval_status": "ESCALATE",
+  "expected_approver": "finance_manager",
+  "expected_exception_category": "FINANCE",
+  "expected_issue_type": "payment_terms_policy_violation",
+  "scenario_id": 3,
+  "scenario_name": "Net-90 payment terms instead of net-30"
+}

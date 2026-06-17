@@ -1,0 +1,7 @@
+bundle_name: scenario_03_net_90_payment_terms
+contract_file: contract.pdf
+contract_type: Non-Disclosure Agreement
+counterparty: Acme Corporation
+jurisdiction: Delaware, USA
+effective_date: '2025-01-15'
+description: NDA with net-90 payment terms instead of net-30.

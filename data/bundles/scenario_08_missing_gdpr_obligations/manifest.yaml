@@ -1,0 +1,7 @@
+bundle_name: scenario_08_missing_gdpr_obligations
+contract_file: contract.pdf
+contract_type: Non-Disclosure Agreement
+counterparty: Acme Corporation
+jurisdiction: Delaware, USA
+effective_date: '2025-01-15'
+description: NDA with personal data language but no GDPR obligations.

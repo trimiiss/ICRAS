@@ -1,0 +1,8 @@
+{
+  "expected_approval_status": "ESCALATE",
+  "expected_approver": "compliance_officer",
+  "expected_exception_category": "COMPLIANCE",
+  "expected_issue_type": "missing_gdpr_clause",
+  "scenario_id": 8,
+  "scenario_name": "Missing GDPR obligations clause"
+}

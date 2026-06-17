@@ -1,0 +1,8 @@
+{
+  "expected_approval_status": "AUTO_APPROVE",
+  "expected_approver": null,
+  "expected_exception_category": "AUTO_APPROVE",
+  "expected_issue_type": null,
+  "scenario_id": 1,
+  "scenario_name": "Clean NDA with standard terms"
+}

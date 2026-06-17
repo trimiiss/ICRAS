@@ -1,0 +1,7 @@
+bundle_name: scenario_04_high_risk_jurisdiction
+contract_file: contract.pdf
+contract_type: Non-Disclosure Agreement
+counterparty: Acme Corporation
+jurisdiction: Russia
+effective_date: '2025-01-15'
+description: NDA governed by a high-risk jurisdiction.

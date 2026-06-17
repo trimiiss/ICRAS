@@ -1,0 +1,7 @@
+bundle_name: scenario_07_low_signature_confidence
+contract_file: contract.pdf
+contract_type: Non-Disclosure Agreement
+counterparty: Acme Corporation
+jurisdiction: Delaware, USA
+effective_date: '2025-01-15'
+description: NDA with signature block below the manual-review confidence threshold.

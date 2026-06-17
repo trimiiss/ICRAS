@@ -1,0 +1,7 @@
+bundle_name: scenario_06_conflicting_governing_law
+contract_file: contract.pdf
+contract_type: Non-Disclosure Agreement
+counterparty: Acme Corporation
+jurisdiction: Delaware, USA
+effective_date: '2025-01-15'
+description: NDA with conflicting governing-law language.

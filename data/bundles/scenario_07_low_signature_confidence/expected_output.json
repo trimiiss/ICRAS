@@ -1,0 +1,8 @@
+{
+  "expected_approval_status": "ESCALATE",
+  "expected_approver": "contract_reviewer",
+  "expected_exception_category": "MANUAL_REVIEW",
+  "expected_issue_type": "low_confidence_signature",
+  "scenario_id": 7,
+  "scenario_name": "Low extraction confidence on signature block"
+}

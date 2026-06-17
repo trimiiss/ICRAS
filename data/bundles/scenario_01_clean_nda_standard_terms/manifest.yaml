@@ -1,0 +1,7 @@
+bundle_name: scenario_01_clean_nda_standard_terms
+contract_file: contract.pdf
+contract_type: Non-Disclosure Agreement
+counterparty: Acme Corporation
+jurisdiction: Delaware, USA
+effective_date: '2025-01-15'
+description: Clean NDA with standard terms for auto-approval.

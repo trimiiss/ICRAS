@@ -1,0 +1,8 @@
+{
+  "expected_approval_status": "ESCALATE",
+  "expected_approver": "legal_counsel",
+  "expected_exception_category": "LEGAL",
+  "expected_issue_type": "auto_renewal_without_opt_out",
+  "scenario_id": 5,
+  "scenario_name": "Auto-renewal with no opt-out window"
+}
