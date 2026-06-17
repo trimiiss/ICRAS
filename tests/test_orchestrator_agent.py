@@ -20,6 +20,9 @@ from utils.bundle_loader import load_bundle
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 NDA_BUNDLE = PROJECT_ROOT / "data" / "bundles" / "clean_nda"
+LOW_CONFIDENCE_BUNDLE = (
+    PROJECT_ROOT / "data" / "bundles" / "scenario_07_low_signature_confidence"
+)
 
 
 def _evidence(evidence_id: str = "EV-001") -> dict:
@@ -225,7 +228,7 @@ def test_run_pipeline_executes_agent_h_graph(tmp_path: Path, monkeypatch) -> Non
     """The LangGraph pipeline should run all required Agent H steps."""
     monkeypatch.chdir(tmp_path)
 
-    result = run_pipeline(str(NDA_BUNDLE))
+    result = run_pipeline(str(LOW_CONFIDENCE_BUNDLE))
     metrics = result["metrics"]
 
     assert metrics["status"] == "completed"
@@ -278,7 +281,7 @@ def test_run_pipeline_executes_agent_h_graph(tmp_path: Path, monkeypatch) -> Non
     low_confidence_findings = [
         finding
         for finding in result["final_findings"]["findings"]
-        if finding["confidence"] < 0.75
+        if str(finding.get("issue_type", "")).startswith("low_confidence")
     ]
     assert low_confidence_findings
     assert all(

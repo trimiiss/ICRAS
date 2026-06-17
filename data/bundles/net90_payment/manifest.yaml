@@ -1,7 +1,7 @@
-bundle_name: clean_nda
+bundle_name: net90_payment
 contract_file: contract.pdf
 contract_type: Non-Disclosure Agreement
 counterparty: Acme Corporation
 jurisdiction: Delaware, USA
 effective_date: '2025-01-15'
-description: Clean NDA with standard terms for auto-approval demo.
+description: NDA with net-90 payment terms for finance approval demo.

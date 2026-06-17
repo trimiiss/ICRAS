@@ -822,6 +822,7 @@ def _validate_low_confidence_signatures(
                 evidence=_field_evidence(context, evidence_records, clause),
                 findings=findings,
                 severity=Severity.MEDIUM,
+                confidence=clause.confidence,
                 source_clause_text=_truncate(clause.text),
                 manual_review_required=True,
             )
@@ -1014,6 +1015,7 @@ def _make_finding(
     evidence: Sequence[EvidencePointer],
     findings: Sequence[Finding],
     severity: Optional[Severity] = None,
+    confidence: float = 1.0,
     source_clause_text: Optional[str] = None,
     manual_review_required: bool = True,
 ) -> Finding:
@@ -1025,7 +1027,7 @@ def _make_finding(
         title=title,
         description=description,
         severity=severity or _field_severity(context, field_name),
-        confidence=1.0,
+        confidence=confidence,
         evidence=finding_evidence,
         recommendation=(
             f"Add or correct the {field_name.replace('_', ' ')} before approval."

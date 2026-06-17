@@ -14,6 +14,7 @@ from schemas.posting_payload import PostingPayload
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 NDA_BUNDLE = PROJECT_ROOT / "data" / "bundles" / "clean_nda"
+NET90_SERVICES_BUNDLE = PROJECT_ROOT / "data" / "bundles" / "net90_services_agreement"
 
 
 def test_valid_bundle_creates_intake_evidence_extraction_and_validation_artifacts(
@@ -30,10 +31,16 @@ def test_valid_bundle_creates_intake_evidence_extraction_and_validation_artifact
         cwd=tmp_path,
         capture_output=True,
         text=True,
+        encoding="utf-8",
         check=False,
     )
 
     assert result.returncode == 0
+    assert "Selected bundle:" in result.stdout
+    assert "✅ create_run" in result.stdout
+    assert "✅ agent_h_finalize" in result.stdout
+    assert "Final Decision: AUTO-APPROVE" in result.stdout
+    assert "Auto-approve (AUTO_APPROVE)" in result.stdout
     assert "evidence_index.json" in result.stdout
     assert "extracted_contract.json" in result.stdout
     assert "validation_findings.json" in result.stdout
@@ -95,15 +102,9 @@ def test_valid_bundle_creates_intake_evidence_extraction_and_validation_artifact
     approval_packet = json.loads(
         (run_dir / "approval_packet.json").read_text(encoding="utf-8")
     )
-    assert approval_packet["decision"]["status"] in {"AUTO_APPROVE", "ESCALATE"}
-    assert approval_packet["exceptions"]
-    assert all(
-        exception["category"]
-        and exception["approver"]
-        and exception["reason"]
-        and exception["evidence"]
-        for exception in approval_packet["exceptions"]
-    )
+    assert approval_packet["decision"]["status"] == "AUTO_APPROVE"
+    assert approval_packet["exceptions"] == []
+    assert approval_packet["approval_route"][0]["category"] == "AUTO_APPROVE"
 
     exceptions_markdown = (run_dir / "exceptions.md").read_text(encoding="utf-8")
     assert "## Next Actions" in exceptions_markdown
@@ -118,9 +119,10 @@ def test_valid_bundle_creates_intake_evidence_extraction_and_validation_artifact
     assert posting_payload.contract.contract_id
     assert posting_payload.contract.bundle_name == "clean_nda"
     assert posting_payload.counterparty.name
-    assert posting_payload.decision.status.value in {"AUTO_APPROVE", "ESCALATE"}
+    assert posting_payload.decision.status.value == "AUTO_APPROVE"
     assert posting_payload.risk.summary
-    assert posting_payload.approval.next_approvers
+    assert posting_payload.approval.routes
+    assert posting_payload.approval.next_approvers == []
     assert posting_payload.artifacts
     assert set(posting_payload.artifact_references) == {
         artifact.name for artifact in posting_payload.artifacts
@@ -143,6 +145,7 @@ def test_invalid_bundle_creates_failed_run_with_audit_log(tmp_path: Path) -> Non
         cwd=tmp_path,
         capture_output=True,
         text=True,
+        encoding="utf-8",
         check=False,
     )
 
@@ -183,3 +186,47 @@ def test_require_metrics_status_rejects_non_mapping_metrics() -> None:
     """CLI summary should fail clearly when metrics has the wrong shape."""
     with pytest.raises(RuntimeError, match="metrics is missing or not a mapping"):
         _require_metrics_status(None)
+
+
+def test_net90_services_demo_prints_finance_route(tmp_path: Path) -> None:
+    """The presenter demo command should show the finance approval path."""
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(PROJECT_ROOT / "main.py"),
+            "--bundle",
+            str(NET90_SERVICES_BUNDLE),
+        ],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=False,
+    )
+
+    assert result.returncode == 0
+    assert "Selected bundle:" in result.stdout
+    assert "net90_services_agreement" in result.stdout
+    assert "✅ validation" in result.stdout
+    assert "✅ risk_scoring" in result.stdout
+    assert "Final Decision: ESCALATE" in result.stdout
+    assert "Finance approval (FINANCE)" in result.stdout
+    assert "finance_manager" in result.stdout
+    assert "Generated artifact paths:" in result.stdout
+
+    run_dirs = list((tmp_path / "runs").iterdir())
+    assert len(run_dirs) == 1
+    run_dir = run_dirs[0]
+    artifact_files = [
+        "audit_log.md",
+        "context_packet.json",
+        "document_inventory.json",
+        "evidence_index.json",
+        "extracted_contract.json",
+        "validation_findings.json",
+        "clause_analysis.json",
+        "approval_packet.json",
+        "posting_payload.json",
+        "metrics.json",
+    ]
+    assert all((run_dir / artifact_file).is_file() for artifact_file in artifact_files)

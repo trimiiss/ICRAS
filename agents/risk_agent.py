@@ -230,10 +230,11 @@ def _score_payment_terms(
     context: Mapping[str, Any],
     clause_risks: list[ClauseRisk],
 ) -> None:
-    """Score payment terms against the net-30 standard."""
+    """Score payment terms against the approved policy standard."""
+    standard_days = _approved_payment_days(context)
     for clause in _find_clauses(clauses, CLAUSE_ALIASES["payment_terms"]):
         for days in _extract_payment_days(clause.text):
-            if days <= STANDARD_PAYMENT_DAYS:
+            if days <= standard_days:
                 continue
             clause_risks.append(
                 _make_clause_risk(
@@ -242,17 +243,31 @@ def _score_payment_terms(
                     severity=Severity.HIGH,
                     explanation=(
                         f"Payment terms are net-{days}, which exceeds the "
-                        f"approved net-{STANDARD_PAYMENT_DAYS} standard."
+                        f"approved net-{standard_days} standard."
                     ),
                     action=(
-                        "Revise payment terms to net-30 or obtain legal and "
-                        "business approval for the extended payment cycle."
+                        f"Revise payment terms to net-{standard_days} or obtain "
+                        "legal and business approval for the extended payment cycle."
                     ),
                     context=context,
                     clause=clause,
-                    tolerance_threshold="payment_terms_days_standard=30",
+                    tolerance_threshold=f"payment_terms_days_standard={standard_days}",
                 )
             )
+
+
+def _approved_payment_days(context: Mapping[str, Any]) -> int:
+    """Return the longest approved net payment term from policy."""
+    policy = _as_mapping(context.get("approval_policy"))
+    approved_payment_terms = _as_mapping(policy.get("approved_payment_terms"))
+    raw_terms = approved_payment_terms.get("terms")
+    if not isinstance(raw_terms, Sequence) or isinstance(raw_terms, (str, bytes)):
+        return STANDARD_PAYMENT_DAYS
+
+    approved_days: list[int] = []
+    for raw_term in raw_terms:
+        approved_days.extend(_extract_payment_days(str(raw_term)))
+    return max(approved_days) if approved_days else STANDARD_PAYMENT_DAYS
 
 
 def _score_validation_findings(

@@ -2180,11 +2180,19 @@ def _low_confidence_cases(
             if not isinstance(finding, Mapping):
                 continue
             score = _confidence_value(finding.get("confidence"))
-            if score is None or score >= LOW_CONFIDENCE_AUDIT_THRESHOLD:
+            issue_type = str(finding.get("issue_type") or "")
+            is_low_confidence_issue = issue_type.startswith("low_confidence")
+            if (
+                not is_low_confidence_issue
+                and (score is None or score >= LOW_CONFIDENCE_AUDIT_THRESHOLD)
+            ):
                 continue
             finding_id = str(finding.get("finding_id") or "unknown_finding")
             title = str(finding.get("title") or "Untitled finding")
-            cases.append(f"Finding {finding_id} confidence={score:.2f}: {title}")
+            confidence_text = "unknown" if score is None else f"{score:.2f}"
+            cases.append(
+                f"Finding {finding_id} confidence={confidence_text}: {title}"
+            )
 
     return cases
 

@@ -80,17 +80,71 @@ without an API key; LangSmith tracing uses `LANGSMITH_API_KEY` when enabled.
 
 ## Running the Pipeline
 
-### Run with the Clean NDA sample bundle
+### One-command demo
+
+Run this from the repository root:
+
+```powershell
+python main.py --bundle data/bundles/net90_services_agreement
+```
+
+The command prints the selected bundle, every agent step with pass/fail status,
+the final decision, the approval route, and generated artifact paths.
+
+### Presenter demo flow
 
 ```powershell
 python main.py --bundle data/bundles/clean_nda
 ```
 
-### Run with the Services Agreement sample bundle
+Expected result: `Final Decision: AUTO-APPROVE`.
 
 ```powershell
-python main.py --bundle data/bundles/services_agreement
+python main.py --bundle data/bundles/missing_liability_cap
 ```
+
+Expected result: `Final Decision: ESCALATE` with `Legal review`.
+
+```powershell
+python main.py --bundle data/bundles/net90_payment
+```
+
+Expected result: `Final Decision: ESCALATE` with `Finance approval`.
+
+### Live policy-change demo
+
+The live policy demo uses `data/bundles/net60_policy_demo`, which contains
+net-60 payment terms while the default policy allows only net-30.
+
+```powershell
+python main.py --bundle data/bundles/net60_policy_demo
+```
+
+Expected result before editing policy: `Finance approval`.
+
+Edit `data/bundles/net60_policy_demo/approval_policy.yaml` and change:
+
+```yaml
+approved_payment_terms:
+  terms:
+  - net-30
+```
+
+to:
+
+```yaml
+approved_payment_terms:
+  terms:
+  - net-60
+```
+
+Then re-run:
+
+```powershell
+python main.py --bundle data/bundles/net60_policy_demo
+```
+
+Expected result after editing policy: `Final Decision: AUTO-APPROVE`.
 
 Each run creates a unique folder under `runs/` with this structure:
 
@@ -163,9 +217,10 @@ approved_payment_terms:
 ```
 
 The next bundle load uses the edited YAML without Python code changes. The test
-`tests/test_policy_rules.py::test_policy_yaml_edit_changes_payment_terms_decision`
-demonstrates the visible decision change: a net-60 payment clause is flagged
-under net-30 policy and accepted after the YAML is changed to net-60.
+`tests/test_policy_rules.py::test_full_pipeline_policy_edit_changes_demo_decision`
+demonstrates the visible full-pipeline decision change: a net-60 payment clause
+routes to Finance under net-30 policy and auto-approves after the YAML is
+changed to net-60.
 
 ---
 

@@ -1,0 +1,56 @@
+%PDF-1.0
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 5 0 R /Resources << /Font << /F1 4 0 R >> >> >>
+endobj
+4 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+5 0 obj
+<< /Length 1261 >>
+stream
+BT /F1 10 Tf 72 720 Td 14 TL
+(Services Agreement Demo) Tj T*
+(1 Parties) Tj T*
+(This Agreement is between Genpact LLC and TechServe Solutions Ltd.) Tj T*
+(2 Effective Date) Tj T*
+(The effective date is March 1, 2025.) Tj T*
+(3 Scope of Services) Tj T*
+(Provider shall deliver cloud infrastructure management services under statements of work.) Tj T*
+(4 Payment Terms) Tj T*
+(Invoices are payable net 90 after receipt of a valid invoice.) Tj T*
+(5 Limitation of Liability) Tj T*
+(Each party's aggregate liability is capped at fees paid in the prior 12 months.) Tj T*
+(6 Termination) Tj T*
+(Either party may terminate this Agreement with 30 days written notice.) Tj T*
+(7 Indemnity) Tj T*
+(Provider shall indemnify Customer for third-party claims caused by breach.) Tj T*
+(8 Governing Law) Tj T*
+(This Agreement is governed by the laws of New York, USA.) Tj T*
+(9 Auto-Renewal) Tj T*
+(This Agreement does not auto-renew after expiration.) Tj T*
+(10 Data Protection) Tj T*
+(Provider shall comply with GDPR data processing terms, cross-border transfer controls, data subject rights, data protection, privacy, and personal data obligations.) Tj T*
+(11 Confidentiality) Tj T*
+(Each party shall protect Confidential Information received under this Agreement.) Tj T*
+ET
+endstream
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000241 00000 n 
+0000000311 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+1624
+%%EOF

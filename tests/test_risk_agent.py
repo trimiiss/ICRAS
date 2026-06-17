@@ -344,3 +344,38 @@ def test_reads_run_artifacts_and_generates_clause_analysis(tmp_path: Path) -> No
         risk["issue_type"] == "payment_terms_exceed_standard"
         for risk in result["clause_analysis"]["clause_risks"]
     )
+
+
+def test_payment_terms_standard_uses_approval_policy(tmp_path: Path) -> None:
+    """Agent E should honor edited approved payment terms from policy."""
+    run_dir = _run_dir(tmp_path)
+    context = _context()
+    context["approval_policy"]["approved_payment_terms"]["terms"] = ["net-60"]
+
+    result = run_risk_assessment(
+        context=context,
+        extracted_contract={
+            "run_id": "risk-run",
+            "clauses": [
+                _clause("payment_terms", "Invoices are payable net 60.", 1),
+                _clause(
+                    "liability_cap",
+                    "Each party's liability is capped at fees paid in 12 months.",
+                    2,
+                ),
+                _clause(
+                    "data_protection",
+                    "The parties will comply with GDPR and privacy law.",
+                    3,
+                ),
+            ],
+        },
+        validation_result={"findings": []},
+        run_dir=run_dir,
+    )
+
+    issue_types = {
+        risk["issue_type"]
+        for risk in result["clause_analysis"]["clause_risks"]
+    }
+    assert "payment_terms_exceed_standard" not in issue_types
