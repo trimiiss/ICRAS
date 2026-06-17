@@ -23,7 +23,12 @@ from schemas.approval_packet import (
 from schemas.common import EvidencePointer, Severity
 from schemas.exception_triage import ExceptionTriageItem
 from schemas.extracted_clause import ExtractedClause
-from schemas.final_artifacts import FinalFindingsResult, PipelineMetrics
+from schemas.final_artifacts import (
+    AgentAuditTrace,
+    ConfidenceDistribution,
+    FinalFindingsResult,
+    PipelineMetrics,
+)
 from schemas.finding import Finding
 from schemas.obligation_result import ObligationRecord, ObligationRegisterResult
 from schemas.posting_payload import (
@@ -171,6 +176,40 @@ DATE_CANDIDATE_PATTERNS: tuple[str, ...] = (
     r"\s+\d{4}\b",
 )
 
+PIPELINE_STEP_ORDER: tuple[str, ...] = (
+    "create_run",
+    "load_bundle",
+    "intake",
+    "evidence_index",
+    "extraction",
+    "counterparty",
+    "validation",
+    "risk_scoring",
+    "obligation_register",
+    "agent_h_finalize",
+)
+
+STEP_INPUT_ARTIFACTS: dict[str, tuple[str, ...]] = {
+    "evidence_index": ("document_inventory",),
+    "extraction": ("document_inventory", "evidence_index"),
+    "counterparty": ("context_packet", "extracted_contract", "evidence_index"),
+    "validation": ("context_packet", "extracted_contract", "evidence_index"),
+    "risk_scoring": ("context_packet", "extracted_contract", "validation_findings"),
+    "obligation_register": ("context_packet", "extracted_contract"),
+    "agent_h_finalize": (
+        "context_packet",
+        "document_inventory",
+        "extracted_contract",
+        "validation_findings",
+        "counterparty_resolution",
+        "clause_analysis",
+        "risk_result",
+        "obligations",
+    ),
+}
+
+LOW_CONFIDENCE_AUDIT_THRESHOLD = 0.75
+
 TIMING_PATTERNS: tuple[str, ...] = (
     r"\bwithin\s+\d+\s+(?:business\s+)?days?\b",
     r"\b\d+\s+days?\s+(?:written\s+)?notice\b",
@@ -268,6 +307,8 @@ def _pipeline_node(
     """Wrap a graph node with audit logging and clear failure handling."""
 
     def wrapped(state: PipelineState) -> PipelineState:
+        started_at = datetime.now(timezone.utc)
+        input_paths = _audit_input_paths(step_name, state)
         run_dir = state.get("run_dir")
         if run_dir:
             append_audit_event(
@@ -276,6 +317,8 @@ def _pipeline_node(
                     "event": f"{step_name}_started",
                     "agent": agent_name,
                     "message": f"{step_name} started.",
+                    "timestamp": started_at.isoformat(),
+                    "input_paths": input_paths,
                 },
             )
         try:
@@ -284,8 +327,29 @@ def _pipeline_node(
             _record_pipeline_failure(state, step_name, agent_name, exc)
             raise OrchestratorAgentError(f"{step_name} failed: {exc}") from exc
 
+        finished_at = datetime.now(timezone.utc)
         completed_run_dir = update.get("run_dir") or run_dir
+        step_trace = _build_agent_audit_trace(
+            step_name=step_name,
+            agent_name=agent_name,
+            state=state,
+            update=update,
+            started_at=started_at,
+            finished_at=finished_at,
+            input_paths=input_paths,
+        )
         if completed_run_dir:
+            if not run_dir:
+                append_audit_event(
+                    completed_run_dir,
+                    {
+                        "event": f"{step_name}_started",
+                        "agent": agent_name,
+                        "message": f"{step_name} started.",
+                        "timestamp": started_at.isoformat(),
+                        "input_paths": input_paths,
+                    },
+                )
             artifacts = sorted((update.get("artifact_paths") or {}).keys())
             append_audit_event(
                 completed_run_dir,
@@ -293,11 +357,33 @@ def _pipeline_node(
                     "event": f"{step_name}_completed",
                     "agent": agent_name,
                     "message": f"{step_name} completed.",
+                    "timestamp": finished_at.isoformat(),
                     "artifacts": artifacts,
+                    "duration_seconds": step_trace["duration_seconds"],
+                    "input_paths": step_trace["input_paths"],
+                    "output_paths": step_trace["output_paths"],
+                    "extracted_clause_count": step_trace["extracted_clause_count"],
+                    "exception_count": step_trace["exception_count"],
+                    "exception_categories": step_trace["exception_categories"],
+                    "fallback_used": step_trace["fallback_used"],
+                    "fallback_reason": step_trace["fallback_reason"],
+                    "low_confidence_count": step_trace["low_confidence_count"],
+                    "confidence_distribution": step_trace["confidence_distribution"],
                 },
             )
         node_update = dict(update)
-        node_update["step_events"] = [{"step": step_name, "status": "completed"}]
+        node_update["step_events"] = [step_trace]
+        if step_name == "agent_h_finalize" and completed_run_dir:
+            _write_final_audit_markdown(
+                run_dir=Path(completed_run_dir),
+                run_id=str(update.get("run_id") or state.get("run_id") or ""),
+                step_events=[*(state.get("step_events") or []), step_trace],
+                metrics=_as_mapping(update.get("metrics")),
+                approval_packet=_as_mapping(update.get("approval_packet")),
+                final_findings=_as_mapping(update.get("final_findings")),
+                extracted_contract=_as_mapping(state.get("extracted_contract")),
+                artifact_paths=_as_mapping(update.get("artifact_paths")),
+            )
         return node_update
 
     return wrapped
@@ -324,6 +410,209 @@ def _record_pipeline_failure(
         },
     )
     update_run_status(run_dir, "failed", error_message)
+
+
+def _build_agent_audit_trace(
+    step_name: str,
+    agent_name: str,
+    state: PipelineState,
+    update: PipelineState,
+    started_at: datetime,
+    finished_at: datetime,
+    input_paths: Mapping[str, str],
+) -> dict[str, Any]:
+    """Build one validated audit-trace entry for a pipeline node."""
+    extracted_contract = _as_mapping(update.get("extracted_contract") or state.get("extracted_contract"))
+    metrics = _as_mapping(update.get("metrics"))
+    approval_packet = _as_mapping(update.get("approval_packet") or state.get("approval_packet"))
+    exceptions = approval_packet.get("exceptions")
+    exception_categories = _exception_category_counts(exceptions)
+
+    if not exception_categories and isinstance(metrics.get("exception_categories"), Mapping):
+        exception_categories = {
+            str(category): int(count)
+            for category, count in metrics["exception_categories"].items()
+            if isinstance(count, int)
+        }
+
+    clause_scores = _confidence_scores_from_clauses(extracted_contract.get("clauses"))
+    confidence_distribution = _confidence_distribution(clause_scores)
+    fallback_reason = extracted_contract.get("fallback_reason") or metrics.get("fallback_reason")
+    raw_low_confidence_count = metrics.get("low_confidence_count")
+    low_confidence_count = (
+        int(raw_low_confidence_count)
+        if isinstance(raw_low_confidence_count, int)
+        else confidence_distribution.low_count
+    )
+
+    trace = AgentAuditTrace(
+        step=step_name,
+        agent=agent_name,
+        status="completed",
+        started_at=started_at,
+        finished_at=finished_at,
+        duration_seconds=round((finished_at - started_at).total_seconds(), 6),
+        input_paths=dict(input_paths),
+        output_paths=_audit_output_paths(step_name, state, update),
+        extracted_clause_count=_safe_len(extracted_contract.get("clauses")),
+        exception_count=sum(exception_categories.values()),
+        exception_categories=exception_categories,
+        fallback_used=bool(extracted_contract.get("fallback_assisted") or metrics.get("fallback_assisted")),
+        fallback_reason=str(fallback_reason) if fallback_reason else None,
+        low_confidence_count=low_confidence_count,
+        confidence_distribution=confidence_distribution,
+    )
+    return trace.model_dump(mode="json")
+
+
+def _audit_input_paths(step_name: str, state: PipelineState) -> dict[str, str]:
+    """Return deterministic input paths for one audit step."""
+    paths: dict[str, str] = {}
+    bundle_path = state.get("bundle_path")
+    if isinstance(bundle_path, str) and bundle_path:
+        paths["bundle"] = str(Path(bundle_path).resolve())
+
+    bundle_data = _as_mapping(state.get("bundle_data"))
+    bundle_dir = bundle_data.get("bundle_dir")
+    if isinstance(bundle_dir, str) and bundle_dir:
+        if step_name == "load_bundle":
+            for filename in (
+                "manifest.yaml",
+                "contract.pdf",
+                "vendor_master.csv",
+                "playbook.yaml",
+                "approval_policy.yaml",
+                "jurisdiction_rules.yaml",
+            ):
+                paths[filename] = str(Path(bundle_dir) / filename)
+        if step_name in {
+            "evidence_index",
+            "extraction",
+            "counterparty",
+            "validation",
+            "risk_scoring",
+            "obligation_register",
+            "agent_h_finalize",
+        }:
+            contract_path = bundle_data.get("contract_path")
+            if isinstance(contract_path, str) and contract_path:
+                paths["contract"] = contract_path
+        if step_name == "counterparty":
+            paths["vendor_master"] = str(Path(bundle_dir) / "vendor_master.csv")
+
+    artifact_paths = _as_mapping(state.get("artifact_paths"))
+    for artifact_name in STEP_INPUT_ARTIFACTS.get(step_name, ()):
+        artifact_path = artifact_paths.get(artifact_name)
+        if isinstance(artifact_path, str) and artifact_path:
+            paths[artifact_name] = artifact_path
+
+    return {key: paths[key] for key in sorted(paths)}
+
+
+def _audit_output_paths(
+    step_name: str,
+    state: PipelineState,
+    update: PipelineState,
+) -> dict[str, str]:
+    """Return deterministic output paths newly written by one audit step."""
+    previous_paths = _as_mapping(state.get("artifact_paths"))
+    updated_paths = _as_mapping(update.get("artifact_paths"))
+    outputs = {
+        str(name): str(path)
+        for name, path in updated_paths.items()
+        if isinstance(path, str) and previous_paths.get(name) != path
+    }
+    if step_name == "create_run":
+        outputs = {
+            str(name): str(path)
+            for name, path in updated_paths.items()
+            if isinstance(path, str)
+        }
+    return {key: outputs[key] for key in sorted(outputs)}
+
+
+def _exception_category_counts(raw_exceptions: Any) -> dict[str, int]:
+    """Count routed exception categories from serialized or model exceptions."""
+    if not isinstance(raw_exceptions, Sequence) or isinstance(raw_exceptions, (str, bytes)):
+        return {}
+
+    counts: dict[str, int] = {}
+    for raw_exception in raw_exceptions:
+        category: Any = None
+        if isinstance(raw_exception, Mapping):
+            category = raw_exception.get("category")
+        elif hasattr(raw_exception, "category"):
+            category = getattr(raw_exception, "category")
+        if hasattr(category, "value"):
+            category = category.value
+        if not isinstance(category, str) or not category:
+            category = "uncategorized"
+        counts[category] = counts.get(category, 0) + 1
+    return {key: counts[key] for key in sorted(counts)}
+
+
+def _confidence_scores_from_clauses(raw_clauses: Any) -> list[float]:
+    """Collect normalized confidence scores from extracted clauses."""
+    if not isinstance(raw_clauses, Sequence) or isinstance(raw_clauses, (str, bytes)):
+        return []
+
+    scores: list[float] = []
+    for raw_clause in raw_clauses:
+        if not isinstance(raw_clause, Mapping):
+            continue
+        score = _confidence_value(raw_clause.get("confidence_score", raw_clause.get("confidence")))
+        if score is not None:
+            scores.append(score)
+    return scores
+
+
+def _confidence_scores_from_findings(raw_findings: Any) -> list[float]:
+    """Collect normalized confidence scores from final findings."""
+    if not isinstance(raw_findings, Sequence) or isinstance(raw_findings, (str, bytes)):
+        return []
+
+    scores: list[float] = []
+    for raw_finding in raw_findings:
+        if isinstance(raw_finding, Mapping):
+            score = _confidence_value(raw_finding.get("confidence"))
+        elif hasattr(raw_finding, "confidence"):
+            score = _confidence_value(getattr(raw_finding, "confidence"))
+        else:
+            score = None
+        if score is not None:
+            scores.append(score)
+    return scores
+
+
+def _confidence_value(raw_value: Any) -> Optional[float]:
+    """Return a valid confidence value or None."""
+    try:
+        score = float(raw_value)
+    except (TypeError, ValueError):
+        return None
+    if score < 0.0 or score > 1.0:
+        return None
+    return score
+
+
+def _confidence_distribution(scores: Sequence[float]) -> ConfidenceDistribution:
+    """Bucket confidence scores for metrics and audit output."""
+    if not scores:
+        return ConfidenceDistribution()
+
+    clean_scores = [min(max(float(score), 0.0), 1.0) for score in scores]
+    return ConfidenceDistribution(
+        count=len(clean_scores),
+        low_count=sum(score < LOW_CONFIDENCE_AUDIT_THRESHOLD for score in clean_scores),
+        medium_count=sum(
+            LOW_CONFIDENCE_AUDIT_THRESHOLD <= score < 0.9
+            for score in clean_scores
+        ),
+        high_count=sum(score >= 0.9 for score in clean_scores),
+        min_score=round(min(clean_scores), 4),
+        max_score=round(max(clean_scores), 4),
+        average_score=round(sum(clean_scores) / len(clean_scores), 4),
+    )
 
 
 def _create_run_node(state: PipelineState) -> PipelineState:
@@ -543,6 +832,8 @@ def _finalize_node(state: PipelineState) -> PipelineState:
         status="completed",
         overall_severity=overall_severity,
         final_finding_count=len(final_findings),
+        exceptions=exceptions,
+        final_findings=final_findings,
         artifact_paths=artifact_paths,
     )
 
@@ -1280,6 +1571,8 @@ def _build_metrics(
     status: str,
     overall_severity: Severity,
     final_finding_count: int,
+    exceptions: Sequence[ExceptionTriageItem],
+    final_findings: Sequence[Finding],
     artifact_paths: Mapping[str, str],
 ) -> PipelineMetrics:
     """Build final pipeline metrics."""
@@ -1293,10 +1586,29 @@ def _build_metrics(
     clauses = extracted_contract.get("clauses", [])
     clause_count = len(clauses) if isinstance(clauses, list) else 0
     duration_seconds = _duration_since(metadata.get("created_at"))
+    clause_confidence_distribution = _confidence_distribution(
+        _confidence_scores_from_clauses(clauses)
+    )
+    finding_confidence_distribution = _confidence_distribution(
+        _confidence_scores_from_findings(final_findings)
+    )
+    exception_categories = _exception_category_counts(exceptions)
+    exception_count = len(exceptions)
+    exception_rate = 0.0 if clause_count == 0 else round(exception_count / clause_count, 4)
+    exception_rate_percent = round(exception_rate * 100, 2)
+    throughput = (
+        0.0 if duration_seconds <= 0.0 else round(clause_count / duration_seconds, 4)
+    )
+    accuracy_percent = (
+        0.0
+        if clause_confidence_distribution.average_score is None
+        else round(clause_confidence_distribution.average_score * 100, 2)
+    )
     return PipelineMetrics(
         run_id=_require_state_str(state, "run_id"),
         status=status,
         duration_seconds=duration_seconds,
+        total_processing_time_seconds=duration_seconds,
         extraction_clause_count=clause_count,
         validation_finding_count=_safe_len(validation_result.get("findings")),
         risk_finding_count=_safe_len(risk_result.get("findings")),
@@ -1308,11 +1620,27 @@ def _build_metrics(
             )
         ),
         final_finding_count=final_finding_count,
+        exception_count=exception_count,
+        exception_categories=exception_categories,
         obligation_count=_safe_len(obligation_register.get("obligations")),
         fallback_assisted=bool(extracted_contract.get("fallback_assisted")),
-        exception_rate=(
-            0.0 if clause_count == 0 else round(final_finding_count / clause_count, 4)
+        fallback_reason=(
+            str(extracted_contract.get("fallback_reason"))
+            if extracted_contract.get("fallback_reason")
+            else None
         ),
+        low_confidence_count=(
+            clause_confidence_distribution.low_count
+            + finding_confidence_distribution.low_count
+        ),
+        confidence_distributions={
+            "clauses": clause_confidence_distribution,
+            "final_findings": finding_confidence_distribution,
+        },
+        throughput_clauses_per_second=throughput,
+        accuracy_percent=accuracy_percent,
+        exception_rate=exception_rate,
+        exception_rate_percent=exception_rate_percent,
         overall_severity=overall_severity,
         artifact_paths=dict(artifact_paths),
     )
@@ -1411,6 +1739,190 @@ def _write_exceptions_markdown(
             ]
         )
     path.write_text("\n".join(lines), encoding="utf-8")
+
+
+def _write_final_audit_markdown(
+    run_dir: Path,
+    run_id: str,
+    step_events: Sequence[Mapping[str, Any]],
+    metrics: Mapping[str, Any],
+    approval_packet: Mapping[str, Any],
+    final_findings: Mapping[str, Any],
+    extracted_contract: Mapping[str, Any],
+    artifact_paths: Mapping[str, Any],
+) -> None:
+    """Write the auditor-facing step-by-step Markdown trace."""
+    audit_path = run_dir / "audit_log.md"
+    decision = _as_mapping(approval_packet.get("decision"))
+    exception_categories = _as_mapping(metrics.get("exception_categories"))
+    confidence_distributions = _as_mapping(metrics.get("confidence_distributions"))
+    ordered_events = _ordered_step_events(step_events)
+
+    lines = [
+        "# ICRAS Audit Log",
+        "",
+        "## Run Summary",
+        f"- Run ID: {run_id}",
+        f"- Status: {metrics.get('status', '')}",
+        f"- Decision: {decision.get('status', '')}",
+        f"- Processing Duration Seconds: {_format_metric(metrics.get('total_processing_time_seconds'))}",
+        f"- Extraction Count: {metrics.get('extraction_clause_count', 0)}",
+        f"- Exception Count: {metrics.get('exception_count', 0)}",
+        f"- Exception Categories: {_format_count_map(exception_categories)}",
+        f"- Exception Rate Percent: {_format_metric(metrics.get('exception_rate_percent'))}",
+        f"- Accuracy Percent: {_format_metric(metrics.get('accuracy_percent'))}",
+        f"- Throughput Clauses Per Second: {_format_metric(metrics.get('throughput_clauses_per_second'))}",
+        f"- Fallback Used: {'yes' if metrics.get('fallback_assisted') else 'no'}",
+        f"- Fallback Reason: {metrics.get('fallback_reason') or 'None'}",
+        f"- Low-Confidence Count: {metrics.get('low_confidence_count', 0)}",
+        "",
+        "## Workflow Order",
+    ]
+
+    for index, event in enumerate(ordered_events, start=1):
+        step = str(event.get("step") or "unknown_step")
+        agent = str(event.get("agent") or "unknown_agent")
+        lines.append(f"{index}. {step}_completed ({agent})")
+
+    lines.extend(["", "## Step Trace"])
+    for event in ordered_events:
+        step = str(event.get("step") or "unknown_step")
+        lines.extend(
+            [
+                f"### {step}_completed",
+                f"- Agent: {event.get('agent', '')}",
+                f"- Status: {event.get('status', '')}",
+                f"- Started At: {event.get('started_at', '')}",
+                f"- Finished At: {event.get('finished_at', '')}",
+                f"- Duration Seconds: {_format_metric(event.get('duration_seconds'))}",
+                f"- Extracted Clause Count: {event.get('extracted_clause_count', 0)}",
+                f"- Exception Count: {event.get('exception_count', 0)}",
+                f"- Exception Categories: {_format_count_map(_as_mapping(event.get('exception_categories')))}",
+                f"- Fallback Used: {'yes' if event.get('fallback_used') else 'no'}",
+                f"- Fallback Reason: {event.get('fallback_reason') or 'None'}",
+                f"- Low-Confidence Count: {event.get('low_confidence_count', 0)}",
+                "",
+                "#### Inputs",
+            ]
+        )
+        lines.extend(_format_path_map(_as_mapping(event.get("input_paths"))))
+        lines.extend(["", "#### Outputs"])
+        lines.extend(_format_path_map(_as_mapping(event.get("output_paths"))))
+        lines.append("")
+
+    lines.append("## Confidence Scores")
+    if confidence_distributions:
+        for name in sorted(confidence_distributions):
+            lines.extend(
+                _format_confidence_distribution(
+                    name,
+                    _as_mapping(confidence_distributions[name]),
+                )
+            )
+    else:
+        lines.append("- No confidence scores recorded.")
+
+    lines.extend(["", "## Low-Confidence Cases"])
+    low_confidence_cases = _low_confidence_cases(
+        extracted_contract=extracted_contract,
+        final_findings=final_findings,
+    )
+    if low_confidence_cases:
+        lines.extend(f"- {case}" for case in low_confidence_cases)
+    else:
+        lines.append("- No low-confidence cases detected.")
+
+    lines.extend(["", "## Generated Artifacts"])
+    lines.extend(_format_path_map(artifact_paths))
+    lines.append("")
+
+    audit_path.write_text("\n".join(lines), encoding="utf-8")
+
+
+def _ordered_step_events(
+    step_events: Sequence[Mapping[str, Any]],
+) -> list[Mapping[str, Any]]:
+    """Return step events in stable workflow order."""
+    by_step = {
+        str(event.get("step")): event
+        for event in step_events
+        if isinstance(event, Mapping) and event.get("step")
+    }
+    return [by_step[step] for step in PIPELINE_STEP_ORDER if step in by_step]
+
+
+def _format_metric(value: Any) -> str:
+    """Format numeric metrics without unstable trailing precision."""
+    if isinstance(value, (int, float)):
+        return f"{float(value):.4f}".rstrip("0").rstrip(".")
+    return str(value) if value is not None else "0"
+
+
+def _format_count_map(values: Mapping[str, Any]) -> str:
+    """Format a small count mapping for Markdown."""
+    if not values:
+        return "None"
+    return ", ".join(f"{key}={values[key]}" for key in sorted(values))
+
+
+def _format_path_map(paths: Mapping[str, Any]) -> list[str]:
+    """Format path mappings as Markdown bullets."""
+    if not paths:
+        return ["- None recorded."]
+    return [f"- {name}: {paths[name]}" for name in sorted(paths)]
+
+
+def _format_confidence_distribution(
+    name: str,
+    distribution: Mapping[str, Any],
+) -> list[str]:
+    """Format one confidence distribution for Markdown."""
+    return [
+        f"### {name}",
+        f"- Count: {distribution.get('count', 0)}",
+        f"- Low: {distribution.get('low_count', 0)}",
+        f"- Medium: {distribution.get('medium_count', 0)}",
+        f"- High: {distribution.get('high_count', 0)}",
+        f"- Min: {_format_metric(distribution.get('min_score'))}",
+        f"- Max: {_format_metric(distribution.get('max_score'))}",
+        f"- Average: {_format_metric(distribution.get('average_score'))}",
+    ]
+
+
+def _low_confidence_cases(
+    extracted_contract: Mapping[str, Any],
+    final_findings: Mapping[str, Any],
+) -> list[str]:
+    """Return human-readable low-confidence clause and finding summaries."""
+    cases: list[str] = []
+    clauses = extracted_contract.get("clauses")
+    if isinstance(clauses, list):
+        for clause in clauses:
+            if not isinstance(clause, Mapping):
+                continue
+            score = _confidence_value(clause.get("confidence_score", clause.get("confidence")))
+            if score is None or score >= LOW_CONFIDENCE_AUDIT_THRESHOLD:
+                continue
+            clause_id = str(clause.get("clause_id") or "unknown_clause")
+            clause_type = str(clause.get("clause_type") or "unknown_type")
+            title = str(clause.get("title") or clause_type)
+            cases.append(
+                f"Clause {clause_id} ({clause_type}) confidence={score:.2f}: {title}"
+            )
+
+    findings = final_findings.get("findings")
+    if isinstance(findings, list):
+        for finding in findings:
+            if not isinstance(finding, Mapping):
+                continue
+            score = _confidence_value(finding.get("confidence"))
+            if score is None or score >= LOW_CONFIDENCE_AUDIT_THRESHOLD:
+                continue
+            finding_id = str(finding.get("finding_id") or "unknown_finding")
+            title = str(finding.get("title") or "Untitled finding")
+            cases.append(f"Finding {finding_id} confidence={score:.2f}: {title}")
+
+    return cases
 
 
 def _format_evidence_list(evidence_items: Sequence[EvidencePointer]) -> str:

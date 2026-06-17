@@ -1,5 +1,7 @@
 """Tests for Agent H LangGraph orchestration."""
 
+import json
+import re
 from pathlib import Path
 
 from agents.orchestrator_agent import (
@@ -59,6 +61,19 @@ def _finding(
         "manual_review_required": manual_review_required,
         "risk_engine_ready": True,
     }
+
+
+def _audit_structure_lines(audit_log: str) -> list[str]:
+    """Return audit headings and labels while removing run-specific values."""
+    structure: list[str] = []
+    for line in audit_log.splitlines():
+        if line.startswith("#"):
+            structure.append(line)
+        elif re.match(r"^\d+\. ", line):
+            structure.append(line)
+        elif line.startswith("- ") and ":" in line:
+            structure.append(f"{line.split(':', 1)[0]}:")
+    return structure
 
 
 def test_agent_h_deduplicates_and_sorts_findings_by_severity() -> None:
@@ -210,8 +225,16 @@ def test_run_pipeline_executes_agent_h_graph(tmp_path: Path, monkeypatch) -> Non
     monkeypatch.chdir(tmp_path)
 
     result = run_pipeline(str(NDA_BUNDLE))
+    metrics = result["metrics"]
 
-    assert result["metrics"]["status"] == "completed"
+    assert metrics["status"] == "completed"
+    assert metrics["total_processing_time_seconds"] == metrics["duration_seconds"]
+    assert metrics["extraction_clause_count"] == 10
+    assert metrics["exception_count"] == len(result["approval_packet"]["exceptions"])
+    assert metrics["exception_rate_percent"] >= 0.0
+    assert metrics["throughput_clauses_per_second"] > 0.0
+    assert 0.0 <= metrics["accuracy_percent"] <= 100.0
+    assert metrics["confidence_distributions"]["clauses"]["count"] == 10
     assert result["approval_packet"]["decision"]["status"] in {
         "AUTO_APPROVE",
         "ESCALATE",
@@ -227,6 +250,35 @@ def test_run_pipeline_executes_agent_h_graph(tmp_path: Path, monkeypatch) -> Non
     assert (Path(result["artifact_paths"]["final_findings"])).is_file()
     assert (Path(result["artifact_paths"]["approval_packet"])).is_file()
     assert (Path(result["artifact_paths"]["posting_payload"])).is_file()
+    metrics_path = Path(result["artifact_paths"]["metrics"])
+    assert metrics_path.is_file()
+    saved_metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
+    assert saved_metrics["exception_count"] == metrics["exception_count"]
+
+    audit_log_path = Path(result["artifact_paths"]["audit_log"])
+    audit_log = audit_log_path.read_text(encoding="utf-8")
+    assert "## Workflow Order" in audit_log
+    assert "create_run_completed" in audit_log
+    assert "extraction_completed" in audit_log
+    assert "agent_h_finalize_completed" in audit_log
+    assert "Started At" in audit_log
+    assert "Finished At" in audit_log
+    assert "#### Inputs" in audit_log
+    assert "#### Outputs" in audit_log
+    assert "Exception Categories" in audit_log
+    assert "## Confidence Scores" in audit_log
+    assert "## Low-Confidence Cases" in audit_log
+    low_confidence_findings = [
+        finding
+        for finding in result["final_findings"]["findings"]
+        if finding["confidence"] < 0.75
+    ]
+    assert low_confidence_findings
+    assert all(
+        finding["finding_id"] in audit_log
+        for finding in low_confidence_findings
+    )
+
     posting_payload = PostingPayload.model_validate(result["posting_payload"])
     assert posting_payload.payload_type == "CLM_POSTING_PAYLOAD"
     assert posting_payload.contract.contract_id
@@ -242,3 +294,24 @@ def test_run_pipeline_executes_agent_h_graph(tmp_path: Path, monkeypatch) -> Non
     assert steps.index("counterparty") < steps.index("risk_scoring")
     assert steps.index("validation") < steps.index("risk_scoring")
     assert steps[-1] == "agent_h_finalize"
+
+
+def test_audit_log_structure_is_stable_for_same_bundle(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    """Re-running the same bundle should produce the same audit log structure."""
+    monkeypatch.chdir(tmp_path)
+
+    first_result = run_pipeline(str(NDA_BUNDLE))
+    second_result = run_pipeline(str(NDA_BUNDLE))
+
+    first_log = Path(first_result["artifact_paths"]["audit_log"]).read_text(
+        encoding="utf-8"
+    )
+    second_log = Path(second_result["artifact_paths"]["audit_log"]).read_text(
+        encoding="utf-8"
+    )
+
+    assert _audit_structure_lines(first_log) == _audit_structure_lines(second_log)
+    assert set(first_result["metrics"]) == set(second_result["metrics"])
