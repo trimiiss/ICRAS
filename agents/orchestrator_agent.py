@@ -21,6 +21,7 @@ from schemas.approval_packet import (
     ApprovalStatus,
 )
 from schemas.common import EvidencePointer, Severity
+from schemas.exception_triage import ExceptionTriageItem
 from schemas.extracted_clause import ExtractedClause
 from schemas.final_artifacts import FinalFindingsResult, PipelineMetrics
 from schemas.finding import Finding
@@ -177,16 +178,6 @@ SEVERITY_RANK: dict[Severity, int] = {
     Severity.HIGH: 3,
     Severity.CRITICAL: 4,
 }
-
-ROUTE_APPROVERS: dict[str, tuple[str, ...]] = {
-    "LEGAL": ("legal_counsel",),
-    "FINANCE": ("finance_manager",),
-    "COMPLIANCE": ("compliance_officer",),
-    "COUNTERPARTY": ("procurement_manager",),
-    "MANUAL_REVIEW": ("contract_reviewer",),
-    "GENERAL": ("department_head",),
-}
-
 
 def build_pipeline_graph() -> Any:
     """Build the Agent H LangGraph workflow.
@@ -471,9 +462,15 @@ def _finalize_node(state: PipelineState) -> PipelineState:
         counterparty_resolution=counterparty_resolution,
     )
     overall_severity = _overall_severity([finding.severity for finding in final_findings])
-    approval_status, approval_routes = _build_approval_routes(
+    approval_status, exceptions = _triage_findings(
         context=context,
         findings=final_findings,
+        overall_severity=overall_severity,
+    )
+    approval_routes = _build_approval_routes(
+        context=context,
+        exceptions=exceptions,
+        approval_status=approval_status,
         overall_severity=overall_severity,
     )
     requires_human_review = approval_status != ApprovalStatus.AUTO_APPROVE
@@ -512,6 +509,7 @@ def _finalize_node(state: PipelineState) -> PipelineState:
         ),
         risk_result=final_risk_result,
         approval_route=approval_routes,
+        exceptions=exceptions,
         final_findings=final_findings,
         artifact_paths=artifact_paths,
     )
@@ -548,6 +546,7 @@ def _finalize_node(state: PipelineState) -> PipelineState:
         approval_status=approval_status,
         overall_severity=overall_severity,
         approval_routes=approval_routes,
+        exceptions=exceptions,
         findings=final_findings,
     )
     _write_json_file(Path(final_paths["approval_packet"]), approval_packet.model_dump(mode="json"))
@@ -809,114 +808,234 @@ def _overall_severity(severities: Sequence[Severity]) -> Severity:
     return max(severities, key=lambda severity: SEVERITY_RANK[severity])
 
 
-def _build_approval_routes(
+def _triage_findings(
     context: Mapping[str, Any],
     findings: Sequence[Finding],
     overall_severity: Severity,
-) -> tuple[ApprovalStatus, list[ApprovalRoute]]:
-    """Route final findings to approver categories."""
+) -> tuple[ApprovalStatus, list[ExceptionTriageItem]]:
+    """Convert findings into configured per-exception triage items."""
     approval_policy = _as_mapping(context.get("approval_policy"))
-    thresholds = _as_mapping(approval_policy.get("approval_thresholds"))
-    severity_threshold = _as_mapping(thresholds.get(overall_severity.value))
-    base_approvers = [
-        str(approver)
-        for approver in severity_threshold.get("required_approvers", [])
-        if str(approver).strip()
-    ]
-    auto_approve = bool(severity_threshold.get("auto_approve", overall_severity == Severity.LOW))
+    auto_approve = _policy_allows_auto_approval(
+        approval_policy=approval_policy,
+        overall_severity=overall_severity,
+    )
 
-    if not findings and auto_approve:
-        return (
-            ApprovalStatus.AUTO_APPROVE,
-            [
-                ApprovalRoute(
-                    category="AUTO_APPROVE",
-                    approvers=[],
-                    reason="No routed exceptions were detected.",
-                    finding_ids=[],
-                )
-            ],
-        )
+    if not findings:
+        if auto_approve:
+            _require_auto_approve_routing(approval_policy)
+            return ApprovalStatus.AUTO_APPROVE, []
+        return ApprovalStatus.ESCALATE, []
+
+    rules = _exception_route_rules(approval_policy)
+    exceptions: list[ExceptionTriageItem] = []
+    for finding in findings:
+        matched_rule = _match_exception_route_rule(finding, rules)
+        if matched_rule is None:
+            raise OrchestratorAgentError(
+                "No exception routing rule matched finding "
+                f"'{finding.finding_id}' "
+                f"(issue_type={finding.issue_type or 'unknown'}, "
+                f"field_name={finding.field_name or 'unknown'}). "
+                "Update approval_policy.yaml exception_routing.rules."
+            )
+        exceptions.append(_build_exception_triage_item(finding, matched_rule))
+
+    return ApprovalStatus.ESCALATE, exceptions
+
+
+def _build_approval_routes(
+    context: Mapping[str, Any],
+    exceptions: Sequence[ExceptionTriageItem],
+    approval_status: ApprovalStatus,
+    overall_severity: Severity,
+) -> list[ApprovalRoute]:
+    """Build grouped approval routes from per-exception triage items."""
+    approval_policy = _as_mapping(context.get("approval_policy"))
+    if approval_status == ApprovalStatus.AUTO_APPROVE:
+        auto_route = _require_auto_approve_routing(approval_policy)
+        return [
+            ApprovalRoute(
+                category=str(auto_route["category"]),
+                approvers=[],
+                reason=str(auto_route["reason"]),
+                finding_ids=[],
+            )
+        ]
 
     route_data: dict[str, dict[str, Any]] = {}
-    for finding in findings:
-        category = _route_category(finding)
+    base_approvers = _severity_required_approvers(
+        approval_policy=approval_policy,
+        overall_severity=overall_severity,
+    )
+    for exception in exceptions:
+        category = exception.category.value
         data = route_data.setdefault(
             category,
             {
                 "approvers": [],
                 "finding_ids": [],
-                "reason": _route_reason(category),
+                "reasons": [],
             },
         )
-        data["finding_ids"].append(finding.finding_id)
+        data["finding_ids"].append(exception.finding_id)
+        data["reasons"] = _ordered_unique([*data["reasons"], exception.reason])
         data["approvers"] = _ordered_unique(
             [
                 *data["approvers"],
-                *ROUTE_APPROVERS.get(category, ROUTE_APPROVERS["GENERAL"]),
+                exception.approver or "",
                 *base_approvers,
             ]
         )
 
-    routes = [
+    return [
         ApprovalRoute(
             category=category,
             approvers=list(data["approvers"]),
-            reason=str(data["reason"]),
+            reason="; ".join(data["reasons"]),
             finding_ids=list(data["finding_ids"]),
         )
         for category, data in sorted(route_data.items())
     ]
-    if not routes and auto_approve:
-        return (
-            ApprovalStatus.AUTO_APPROVE,
-            [
-                ApprovalRoute(
-                    category="AUTO_APPROVE",
-                    approvers=[],
-                    reason="Policy permits automatic approval.",
-                    finding_ids=[],
-                )
-            ],
+
+
+def _policy_allows_auto_approval(
+    approval_policy: Mapping[str, Any],
+    overall_severity: Severity,
+) -> bool:
+    """Return whether the policy permits auto-approval for a severity level."""
+    thresholds = _as_mapping(approval_policy.get("approval_thresholds"))
+    severity_threshold = _as_mapping(thresholds.get(overall_severity.value))
+    return bool(severity_threshold.get("auto_approve", False))
+
+
+def _severity_required_approvers(
+    approval_policy: Mapping[str, Any],
+    overall_severity: Severity,
+) -> list[str]:
+    """Return policy approvers required for a severity level."""
+    thresholds = _as_mapping(approval_policy.get("approval_thresholds"))
+    severity_threshold = _as_mapping(thresholds.get(overall_severity.value))
+    approvers = severity_threshold.get("required_approvers", [])
+    if not isinstance(approvers, list):
+        return []
+    return _ordered_unique(str(approver) for approver in approvers)
+
+
+def _exception_route_rules(approval_policy: Mapping[str, Any]) -> list[Mapping[str, Any]]:
+    """Return configured exception route rules or raise a clear error."""
+    routing = _as_mapping(approval_policy.get("exception_routing"))
+    rules = routing.get("rules")
+    if not isinstance(rules, list) or not rules:
+        raise OrchestratorAgentError(
+            "approval_policy.yaml must define exception_routing.rules before "
+            "Agent H can route exceptions."
         )
-    return ApprovalStatus.ESCALATE, routes
+    return [dict(rule) for rule in rules if isinstance(rule, Mapping)]
 
 
-def _route_category(finding: Finding) -> str:
-    """Map a finding to an approval route category."""
-    text = " ".join(
-        [
-            finding.category,
-            finding.field_name or "",
-            finding.issue_type or "",
-            finding.title,
-            finding.description,
-        ]
-    ).lower()
-    if "payment" in text or "invoice" in text or "fee" in text:
-        return "FINANCE"
-    if "gdpr" in text or "data" in text or "privacy" in text or "jurisdiction" in text:
-        return "COMPLIANCE"
-    if "counterparty" in text or "vendor" in text:
-        return "COUNTERPARTY"
-    if "confidence" in text or finding.manual_review_required:
-        return "MANUAL_REVIEW"
-    if "law" in text or "liability" in text or "indemn" in text or "termination" in text:
-        return "LEGAL"
-    return "LEGAL" if finding.severity in {Severity.HIGH, Severity.CRITICAL} else "GENERAL"
+def _require_auto_approve_routing(approval_policy: Mapping[str, Any]) -> Mapping[str, Any]:
+    """Return configured auto-approval routing details or raise a clear error."""
+    routing = _as_mapping(approval_policy.get("exception_routing"))
+    auto_approve = _as_mapping(routing.get("auto_approve"))
+    required_fields = ("category", "reason", "next_action")
+    missing = [
+        field
+        for field in required_fields
+        if not str(auto_approve.get(field) or "").strip()
+    ]
+    if missing:
+        raise OrchestratorAgentError(
+            "approval_policy.yaml exception_routing.auto_approve is missing: "
+            + ", ".join(missing)
+        )
+    return auto_approve
 
 
-def _route_reason(category: str) -> str:
-    """Return a human-readable reason for an approval route."""
-    reasons = {
-        "LEGAL": "Legal review is required for contract term risk.",
-        "FINANCE": "Finance approval is required for commercial term risk.",
-        "COMPLIANCE": "Compliance review is required for regulatory or jurisdiction risk.",
-        "COUNTERPARTY": "Procurement review is required for counterparty identity risk.",
-        "MANUAL_REVIEW": "Manual review is required because confidence or data quality is low.",
-        "GENERAL": "Business approval is required for a routed exception.",
+def _match_exception_route_rule(
+    finding: Finding,
+    rules: Sequence[Mapping[str, Any]],
+) -> Optional[Mapping[str, Any]]:
+    """Return the first configured route rule that matches a finding."""
+    for rule in rules:
+        if _exception_route_rule_matches(finding, rule):
+            return rule
+    return None
+
+
+def _exception_route_rule_matches(
+    finding: Finding,
+    rule: Mapping[str, Any],
+) -> bool:
+    """Return whether a configured route rule matches a finding."""
+    checks: list[bool] = []
+    issue_types = _normalized_policy_values(rule.get("match_issue_types"))
+    if issue_types:
+        checks.append(_normalize_key(finding.issue_type or "") in issue_types)
+
+    field_names = _normalized_policy_values(rule.get("match_field_names"))
+    if field_names:
+        checks.append(_normalize_key(finding.field_name or "") in field_names)
+
+    categories = _normalized_policy_values(rule.get("match_categories"))
+    if categories:
+        checks.append(_normalize_key(finding.category) in categories)
+
+    text_fragments = _normalized_policy_values(rule.get("match_text"))
+    if text_fragments:
+        haystack = _normalize_key(
+            " ".join(
+                [
+                    finding.category,
+                    finding.field_name or "",
+                    finding.issue_type or "",
+                    finding.title,
+                    finding.description,
+                    finding.message or "",
+                    finding.source_clause_text or "",
+                ]
+            )
+        )
+        checks.append(any(fragment in haystack for fragment in text_fragments))
+
+    manual_review_required = rule.get("manual_review_required")
+    if isinstance(manual_review_required, bool):
+        checks.append(finding.manual_review_required is manual_review_required)
+
+    max_confidence = rule.get("max_confidence")
+    if isinstance(max_confidence, (int, float)):
+        checks.append(float(finding.confidence) <= float(max_confidence))
+
+    return bool(checks) and all(checks)
+
+
+def _build_exception_triage_item(
+    finding: Finding,
+    rule: Mapping[str, Any],
+) -> ExceptionTriageItem:
+    """Build one schema-valid exception triage item from a matched rule."""
+    return ExceptionTriageItem(
+        finding_id=finding.finding_id,
+        category=str(rule["category"]),
+        approver=str(rule.get("approver") or ""),
+        reason=str(rule["reason"]),
+        next_action=str(rule["next_action"]),
+        severity=finding.severity,
+        evidence=list(finding.evidence),
+        source_title=finding.title,
+        issue_type=finding.issue_type,
+        field_name=finding.field_name,
+    )
+
+
+def _normalized_policy_values(raw_values: Any) -> set[str]:
+    """Normalize a policy list into comparable string keys."""
+    if not isinstance(raw_values, list):
+        return set()
+    return {
+        _normalize_key(str(value))
+        for value in raw_values
+        if str(value).strip()
     }
-    return reasons.get(category, "Review is required for a routed exception.")
 
 
 def _ordered_unique(values: Iterable[str]) -> list[str]:
@@ -1040,6 +1159,7 @@ def _write_exceptions_markdown(
     approval_status: ApprovalStatus,
     overall_severity: Severity,
     approval_routes: Sequence[ApprovalRoute],
+    exceptions: Sequence[ExceptionTriageItem],
     findings: Sequence[Finding],
 ) -> None:
     """Write the human-readable exception summary."""
@@ -1050,9 +1170,23 @@ def _write_exceptions_markdown(
         f"- Decision: {approval_status.value}",
         f"- Overall Severity: {overall_severity.value}",
         f"- Final Finding Count: {len(findings)}",
+        f"- Routed Exception Count: {len(exceptions)}",
         "",
-        "## Approval Routes",
+        "## Next Actions",
     ]
+    if exceptions:
+        for exception in exceptions:
+            lines.extend(
+                [
+                    f"- {exception.category.value}: {exception.next_action} "
+                    f"(Approver: {exception.approver})",
+                ]
+            )
+        lines.append("")
+    else:
+        lines.extend(["- No human approval required.", ""])
+
+    lines.append("## Approval Routes")
     if approval_routes:
         for route in approval_routes:
             approvers = ", ".join(route.approvers) if route.approvers else "None"
@@ -1069,30 +1203,38 @@ def _write_exceptions_markdown(
     else:
         lines.extend(["No approval routes were required.", ""])
 
-    lines.append("## Findings")
-    if not findings:
+    lines.append("## Exceptions")
+    if not exceptions:
         lines.extend(["No exceptions were detected.", ""])
-    for finding in findings:
-        evidence = finding.evidence_pointer or finding.evidence[0]
+    for exception in exceptions:
+        evidence_text = _format_evidence_list(exception.evidence)
+        lines.extend(
+            [
+                f"### {exception.category.value}: {exception.source_title}",
+                f"- Finding ID: {exception.finding_id}",
+                f"- Severity: {exception.severity.value}",
+                f"- Approver: {exception.approver or 'None'}",
+                f"- Reason: {exception.reason}",
+                f"- Next Action: {exception.next_action}",
+                f"- Evidence: {evidence_text}",
+                "",
+            ]
+        )
+    path.write_text("\n".join(lines), encoding="utf-8")
+
+
+def _format_evidence_list(evidence_items: Sequence[EvidencePointer]) -> str:
+    """Format evidence pointers for human-readable markdown."""
+    formatted: list[str] = []
+    for evidence in evidence_items:
         evidence_bits = [
             evidence.source_file,
             f"page {evidence.page_number}" if evidence.page_number else None,
             evidence.clause_reference,
             evidence.evidence_id,
         ]
-        evidence_text = " | ".join(bit for bit in evidence_bits if bit)
-        lines.extend(
-            [
-                f"### {finding.finding_id}: {finding.title}",
-                f"- Severity: {finding.severity.value}",
-                f"- Category: {finding.category}",
-                f"- Reason: {finding.description}",
-                f"- Recommendation: {finding.recommendation or 'Review before approval.'}",
-                f"- Evidence: {evidence_text or evidence.source_file}",
-                "",
-            ]
-        )
-    path.write_text("\n".join(lines), encoding="utf-8")
+        formatted.append(" | ".join(bit for bit in evidence_bits if bit))
+    return "; ".join(value for value in formatted if value) or "No evidence pointer"
 
 
 def _as_mapping(value: Any) -> Mapping[str, Any]:

@@ -70,6 +70,8 @@ class TestLoadValidBundle:
         assert "auto_renewal_rules" in policy
         assert "high_risk_jurisdictions" in policy
         assert "gdpr_requirements" in policy
+        assert "exception_routing" in policy
+        assert policy["exception_routing"]["rules"]
 
     def test_jurisdiction_rules_loaded(self):
         result = load_bundle(NDA_BUNDLE)

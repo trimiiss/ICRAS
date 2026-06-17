@@ -117,6 +117,11 @@ runs/<run_id>/
 
 Running the same bundle multiple times produces separate run folders.
 
+`approval_packet.json` includes grouped approval routes plus per-exception
+triage items with category, approver, reason, next action, and evidence links.
+The route table is configured in each bundle's `approval_policy.yaml` under
+`exception_routing`, so approver routing can change without Python code edits.
+
 ---
 
 ## Running Tests
