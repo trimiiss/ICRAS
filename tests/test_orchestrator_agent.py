@@ -6,6 +6,7 @@ from pathlib import Path
 
 from agents.orchestrator_agent import (
     _build_approval_routes,
+    _compare_determinism_payloads,
     _merge_deduplicate_sort_findings,
     _triage_findings,
     run_pipeline,
@@ -235,6 +236,12 @@ def test_run_pipeline_executes_agent_h_graph(tmp_path: Path, monkeypatch) -> Non
     assert metrics["throughput_clauses_per_second"] > 0.0
     assert 0.0 <= metrics["accuracy_percent"] <= 100.0
     assert metrics["confidence_distributions"]["clauses"]["count"] == 10
+    assert metrics["determinism_check"] == "PASS"
+    assert metrics["determinism_compared_sections"] == [
+        "risk_result",
+        "approval_decision",
+    ]
+    assert "created_at" in metrics["determinism_excluded_timestamp_fields"]
     assert result["approval_packet"]["decision"]["status"] in {
         "AUTO_APPROVE",
         "ESCALATE",
@@ -315,3 +322,71 @@ def test_audit_log_structure_is_stable_for_same_bundle(
 
     assert _audit_structure_lines(first_log) == _audit_structure_lines(second_log)
     assert set(first_result["metrics"]) == set(second_result["metrics"])
+
+
+def test_determinism_check_passes_for_identical_bundle_rerun(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    """The second same-bundle run should compare cleanly against the first run."""
+    monkeypatch.chdir(tmp_path)
+
+    first_result = run_pipeline(str(NDA_BUNDLE))
+    second_result = run_pipeline(str(NDA_BUNDLE))
+    second_metrics = second_result["metrics"]
+
+    assert second_metrics["determinism_check"] == "PASS"
+    assert second_metrics["determinism_baseline_run_id"] == first_result["run_id"]
+    assert second_metrics["determinism_differences"] == []
+    assert second_metrics["determinism_compared_sections"] == [
+        "risk_result",
+        "approval_decision",
+    ]
+    assert "created_at" in second_metrics["determinism_excluded_timestamp_fields"]
+
+    saved_metrics = json.loads(
+        Path(second_result["artifact_paths"]["metrics"]).read_text(encoding="utf-8")
+    )
+    assert saved_metrics["determinism_check"] == "PASS"
+    assert saved_metrics["determinism_baseline_run_id"] == first_result["run_id"]
+
+
+def test_determinism_comparison_ignores_timestamps_and_reports_differences() -> None:
+    """Timestamp changes should be ignored while decision/risk changes fail."""
+    result = _compare_determinism_payloads(
+        baseline_payload={
+            "risk_result": {
+                "overall_severity": "LOW",
+                "summary": "No issues.",
+                "created_at": "2026-01-01T00:00:00Z",
+            },
+            "approval_decision": {
+                "status": "AUTO_APPROVE",
+                "approved": True,
+                "rationale": "Standard terms.",
+                "reviewed_at": "2026-01-01T00:00:00Z",
+            },
+        },
+        current_payload={
+            "risk_result": {
+                "overall_severity": "HIGH",
+                "summary": "High risk.",
+                "created_at": "2026-01-02T00:00:00Z",
+            },
+            "approval_decision": {
+                "status": "ESCALATE",
+                "approved": False,
+                "rationale": "Review required.",
+                "reviewed_at": "2026-01-02T00:00:00Z",
+            },
+        },
+        baseline_run_id="baseline-run",
+    )
+
+    assert result["determinism_check"] == "FAIL"
+    assert result["determinism_baseline_run_id"] == "baseline-run"
+    differences = "\n".join(result["determinism_differences"])
+    assert "risk_result.overall_severity" in differences
+    assert "approval_decision.status" in differences
+    assert "created_at" not in differences
+    assert "reviewed_at" not in differences

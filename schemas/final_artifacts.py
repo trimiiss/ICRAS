@@ -187,6 +187,26 @@ class PipelineMetrics(BaseModel):
     exception_rate_percent: float = Field(
         ..., ge=0.0, description="Routed exceptions divided by extracted clauses as a percentage."
     )
+    determinism_check: str = Field(
+        ...,
+        description="PASS when the latest same-bundle comparison is stable, else FAIL.",
+    )
+    determinism_baseline_run_id: Optional[str] = Field(
+        None,
+        description="Prior same-bundle run used as the comparison baseline.",
+    )
+    determinism_compared_sections: List[str] = Field(
+        default_factory=list,
+        description="Pipeline output sections compared for deterministic behavior.",
+    )
+    determinism_excluded_timestamp_fields: List[str] = Field(
+        default_factory=list,
+        description="Timestamp fields intentionally ignored during comparison.",
+    )
+    determinism_differences: List[str] = Field(
+        default_factory=list,
+        description="Non-timestamp differences found between compared runs.",
+    )
     overall_severity: Severity = Field(
         ..., description="Highest final finding severity."
     )
