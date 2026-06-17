@@ -11,6 +11,7 @@ from agents.orchestrator_agent import (
 from schemas.common import Severity
 from schemas.exception_triage import ExceptionCategory
 from schemas.finding import Finding
+from schemas.posting_payload import PostingPayload
 from utils.bundle_loader import load_bundle
 
 
@@ -226,6 +227,16 @@ def test_run_pipeline_executes_agent_h_graph(tmp_path: Path, monkeypatch) -> Non
     assert (Path(result["artifact_paths"]["final_findings"])).is_file()
     assert (Path(result["artifact_paths"]["approval_packet"])).is_file()
     assert (Path(result["artifact_paths"]["posting_payload"])).is_file()
+    posting_payload = PostingPayload.model_validate(result["posting_payload"])
+    assert posting_payload.payload_type == "CLM_POSTING_PAYLOAD"
+    assert posting_payload.contract.contract_id
+    assert posting_payload.counterparty.name
+    assert posting_payload.decision.status.value in {"AUTO_APPROVE", "ESCALATE"}
+    assert posting_payload.risk.summary
+    assert posting_payload.approval.routes
+    assert posting_payload.approval.next_approvers
+    assert posting_payload.artifacts
+    assert set(posting_payload.artifact_references) == set(result["artifact_paths"])
 
     steps = [event["step"] for event in result["step_events"]]
     assert steps.index("counterparty") < steps.index("risk_scoring")

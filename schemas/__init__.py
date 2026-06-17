@@ -43,7 +43,15 @@ from schemas.policy_rules import (
     SigningAuthorityThresholds,
 )
 from schemas.risk_result import ClauseAnalysisResult, ClauseRisk, RiskResult
-from schemas.posting_payload import PostingPayload
+from schemas.posting_payload import (
+    ApprovalPostingData,
+    ArtifactReference,
+    ContractPostingData,
+    CounterpartyPostingData,
+    DecisionPostingData,
+    PostingPayload,
+    RiskPostingData,
+)
 from schemas.validation_result import ValidatedContractField, ValidationResult
 
 __all__ = [
@@ -89,7 +97,13 @@ __all__ = [
     "ApprovalStatus",
     "FinalFindingsResult",
     "PipelineMetrics",
+    "ApprovalPostingData",
+    "ArtifactReference",
+    "ContractPostingData",
+    "CounterpartyPostingData",
+    "DecisionPostingData",
     "PostingPayload",
+    "RiskPostingData",
     "ValidatedContractField",
     "ValidationResult",
 ]
