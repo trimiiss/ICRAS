@@ -4,6 +4,8 @@ version = "0.1.0"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.115,<1.0",
+    "langchain-core>=1.4,<2.0",
+    "langchain-openai>=1.2,<2.0",
     "langgraph>=1.2,<2.0",
     "langsmith>=0.4,<1.0",
     "pydantic>=2.0,<3.0",

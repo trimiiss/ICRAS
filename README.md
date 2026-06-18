@@ -97,6 +97,32 @@ python main.py --bundle data/bundles/net60_policy_demo
 
 The CLI prints the selected bundle, step status, final decision, approval route, and generated artifact paths.
 
+## LangChain Showcase
+
+After a pipeline run completes, generate a deterministic approval brief from the
+run artifacts with the LangChain Runnable showcase:
+
+```bash
+python examples/langchain_approval_brief.py --run-dir runs/<run_id> --trace
+```
+
+The example reads `approval_packet.json`, `final_findings.json`, `metrics.json`,
+and `context_packet.json`, then writes `approval_brief.md` in the run folder.
+By default it uses deterministic LangChain `RunnableLambda` steps and does not
+call a model.
+
+To showcase a real LLM call through LangChain, set an OpenAI API key and add
+`--llm`:
+
+```bash
+export OPENAI_API_KEY=your_openai_api_key
+python examples/langchain_approval_brief.py --run-dir runs/<run_id> --llm --trace
+```
+
+Use `--model` or `ICRAS_LANGCHAIN_MODEL` to choose a different OpenAI model.
+Use `--trace` with LangSmith credentials to inspect the load, fact-selection,
+prompt, model, and parsing steps as nested LangChain runs.
+
 ## Run Artifacts
 
 Each execution creates a folder under `runs/<run_id>/` with deterministic artifacts:
@@ -163,6 +189,7 @@ The test suite covers bundle loading, run management, extraction, validation, co
 - New code should import from package names such as `agents.validation`, `agents.risk`, and `agents.orchestrator`.
 - Shared cross-agent logic belongs in `utils/`.
 - Artifact contracts belong in `schemas/`.
+- Demo-only integrations belong in `examples/` unless they become part of the deterministic pipeline.
 - Run artifacts should remain deterministic and evidence-backed.
 - Policy behavior should stay data-driven through YAML wherever possible.
 
