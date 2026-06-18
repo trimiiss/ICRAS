@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 from typing import Any, Mapping, Optional
 
+from utils.mapping import as_mapping as _as_mapping
 
 DETERMINISM_COMPARED_SECTIONS: tuple[str, ...] = (
     "risk_result",
@@ -241,7 +242,3 @@ def _format_determinism_value(value: Any) -> str:
         return formatted
     return formatted[:197].rstrip() + "..."
 
-
-def _as_mapping(value: Any) -> Mapping[str, Any]:
-    """Return value when it is a mapping, else an empty mapping."""
-    return value if isinstance(value, Mapping) else {}

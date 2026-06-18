@@ -10,6 +10,7 @@ from schemas.risk_result import ClauseRisk
 from agents.risk.constants import CLAUSE_ALIASES, KNOWN_JURISDICTIONS, SEVERITY_RANK
 from agents.risk.errors import RiskAgentError
 from utils.clauses import coerce_extracted_clauses
+from utils.mapping import as_mapping as _as_mapping
 from utils.text import (
     is_non_empty as _is_non_empty,
     normalize_key as _normalize_key,
@@ -211,11 +212,6 @@ def _clause_evidence(
 def _primary_evidence(evidence: Sequence[EvidencePointer]) -> Optional[EvidencePointer]:
     """Return first evidence pointer when present."""
     return evidence[0] if evidence else None
-
-
-def _as_mapping(value: Any) -> Mapping[str, Any]:
-    """Return value if it is a mapping, else an empty mapping."""
-    return value if isinstance(value, Mapping) else {}
 
 
 def _severity_from_value(value: Any, default: Severity) -> Severity:

@@ -9,6 +9,7 @@ from schemas.common import Severity
 from schemas.exception_triage import ExceptionTriageItem
 from schemas.final_artifacts import ConfidenceDistribution, PipelineMetrics
 from schemas.finding import Finding
+from utils.mapping import as_mapping as _as_mapping
 
 
 LOW_CONFIDENCE_AUDIT_THRESHOLD = 0.75
@@ -244,7 +245,3 @@ def _optional_str(value: Any) -> Optional[str]:
         return None
     return str(value)
 
-
-def _as_mapping(value: Any) -> Mapping[str, Any]:
-    """Return value when it is a mapping, else an empty mapping."""
-    return value if isinstance(value, Mapping) else {}

@@ -7,7 +7,7 @@ from typing import Any, Mapping, Optional
 import yaml
 
 from agents.risk.errors import RiskAgentError
-from agents.risk.helpers import _as_mapping
+from utils.mapping import as_mapping as _as_mapping
 
 def _load_playbook(
     context: Mapping[str, Any],
@@ -56,4 +56,3 @@ def _read_json_artifact(
     if not isinstance(payload, dict):
         raise RiskAgentError(f"Expected '{path}' to contain a JSON object.")
     return payload
-

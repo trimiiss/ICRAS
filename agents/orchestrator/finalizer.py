@@ -22,6 +22,7 @@ from schemas.final_artifacts import FinalFindingsResult
 from schemas.finding import Finding
 from schemas.risk_result import RiskResult
 from utils.determinism import build_determinism_result
+from utils.mapping import as_mapping as _as_mapping
 from utils.posting_payload_builder import build_posting_payload
 from utils.run_manager import append_audit_event, update_run_status
 
@@ -215,7 +216,3 @@ def _merge_dicts(left: Mapping[str, str], right: Mapping[str, str]) -> dict[str,
     merged.update(right)
     return merged
 
-
-def _as_mapping(value: Any) -> Mapping[str, Any]:
-    """Return value when it is a mapping, else an empty mapping."""
-    return value if isinstance(value, Mapping) else {}

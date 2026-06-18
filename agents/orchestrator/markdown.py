@@ -12,6 +12,7 @@ from schemas.approval_packet import ApprovalRoute, ApprovalStatus
 from schemas.common import EvidencePointer, Severity
 from schemas.exception_triage import ExceptionTriageItem
 from schemas.finding import Finding
+from utils.mapping import as_mapping as _as_mapping
 
 
 def write_exceptions_markdown(
@@ -289,7 +290,3 @@ def _format_evidence_list(evidence_items: Sequence[EvidencePointer]) -> str:
         formatted.append(" | ".join(bit for bit in evidence_bits if bit))
     return "; ".join(value for value in formatted if value) or "No evidence pointer"
 
-
-def _as_mapping(value: Any) -> Mapping[str, Any]:
-    """Return value when it is a mapping, else an empty mapping."""
-    return value if isinstance(value, Mapping) else {}

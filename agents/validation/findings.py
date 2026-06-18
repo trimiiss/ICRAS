@@ -5,16 +5,18 @@ from typing import Any, Mapping, Optional, Sequence
 from schemas.common import EvidencePointer, Severity
 from schemas.finding import Finding
 from schemas.validation_result import ValidatedContractField
-from agents.validation.helpers import (
-    _approved_payment_terms,
+from agents.validation.evidence_helpers import (
     _evidence_page,
     _evidence_text,
-    _extract_payment_terms,
     _fallback_evidence,
-    _field_severity,
-    _payment_policy_severity,
     _primary_evidence,
 )
+from agents.validation.policy_helpers import (
+    _approved_payment_terms,
+    _field_severity,
+    _payment_policy_severity,
+)
+from utils.payment_terms import extract_payment_terms as _extract_payment_terms
 
 def _record_missing_field(
     field_name: str,

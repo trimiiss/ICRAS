@@ -10,15 +10,17 @@ from agents.validation.findings import (
     _record_missing_field,
     _record_unapproved_payment_terms,
 )
-from agents.validation.helpers import (
-    _field_evidence,
+from agents.validation.core_helpers import (
     _find_clause,
     _get_context_value,
+)
+from agents.validation.evidence_helpers import _field_evidence
+from agents.validation.policy_helpers import (
     _liability_cap_required,
     _normalize_payment_terms_value,
     _payment_terms_applicable,
-    _truncate,
 )
+from utils.text import truncate as _truncate
 
 
 def _validate_payment_terms(

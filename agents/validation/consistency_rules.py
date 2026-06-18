@@ -5,28 +5,34 @@ from typing import Any, Mapping, Sequence
 from schemas.common import Severity
 from schemas.extracted_clause import ExtractedClause
 from schemas.finding import Finding
-from agents.validation.constants import FIELD_ALIASES
-from agents.validation.findings import _make_finding
-from agents.validation.helpers import (
-    _clause_matches_aliases,
-    _clause_evidence,
+from agents.validation.analysis_helpers import (
     _contains_numeric_calculation,
     _detect_calculation_error,
-    _evidence_text,
     _extract_governing_law,
     _extract_party_names,
-    _fallback_evidence,
-    _field_evidence,
+)
+from agents.validation.constants import FIELD_ALIASES
+from agents.validation.core_helpers import (
+    _clause_matches_aliases,
     _find_clause,
     _find_clauses,
     _get_raw_context_value,
+)
+from agents.validation.evidence_helpers import (
+    _clause_evidence,
+    _evidence_text,
+    _fallback_evidence,
+    _field_evidence,
+)
+from agents.validation.findings import _make_finding
+from agents.validation.policy_helpers import (
     _manual_review_confidence_threshold,
-    _truncate,
 )
 from utils.dates import (
     extract_normalized_date as _extract_normalized_date,
     normalize_date as _normalize_date,
 )
+from utils.text import truncate as _truncate
 
 
 def _validate_suspicious_date_ordering(

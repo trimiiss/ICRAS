@@ -10,19 +10,20 @@ from agents.validation.findings import (
     _record_invalid_field,
     _record_missing_field,
 )
-from agents.validation.helpers import (
-    _context_value_evidence,
-    _field_evidence,
+from agents.validation.core_helpers import (
     _find_clause,
     _get_context_value,
     _get_raw_context_value,
-    _is_non_empty,
-    _truncate,
+)
+from agents.validation.evidence_helpers import (
+    _context_value_evidence,
+    _field_evidence,
 )
 from utils.dates import (
     extract_normalized_date as _extract_normalized_date,
     normalize_date as _normalize_date,
 )
+from utils.text import is_non_empty as _is_non_empty, truncate as _truncate
 
 
 def _validate_party_names(

@@ -7,6 +7,7 @@ from schemas.approval_packet import ApprovalRoute, ApprovalStatus
 from schemas.common import Severity
 from schemas.exception_triage import ExceptionTriageItem
 from schemas.finding import Finding
+from utils.mapping import as_mapping as _as_mapping
 from utils.text import normalize_key as _normalize_key
 
 
@@ -264,7 +265,3 @@ def _ordered_unique(values: Iterable[str]) -> list[str]:
             result.append(cleaned)
     return result
 
-
-def _as_mapping(value: Any) -> Mapping[str, Any]:
-    """Return value when it is a mapping, else an empty mapping."""
-    return value if isinstance(value, Mapping) else {}

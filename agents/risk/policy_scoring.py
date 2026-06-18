@@ -9,7 +9,6 @@ from schemas.risk_result import ClauseRisk
 from agents.risk.constants import CLAUSE_ALIASES, STANDARD_PAYMENT_DAYS
 from agents.risk.helpers import (
     _aliases_for_clause_type,
-    _as_mapping,
     _find_clauses,
     _first_clause,
     _minor_variance_severity,
@@ -17,6 +16,7 @@ from agents.risk.helpers import (
     _severity_from_value,
 )
 from agents.risk.results import _make_clause_risk
+from utils.mapping import as_mapping as _as_mapping
 from utils.payment_terms import extract_payment_days as _extract_payment_days
 from utils.text import optional_int as _optional_int
 

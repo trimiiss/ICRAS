@@ -8,7 +8,6 @@ from schemas.finding import Finding
 from schemas.risk_result import ClauseRisk
 from agents.risk.constants import CLAUSE_ALIASES
 from agents.risk.helpers import (
-    _as_mapping,
     _contains_word,
     _extract_jurisdictions,
     _extract_party_names,
@@ -18,6 +17,7 @@ from agents.risk.helpers import (
     _primary_evidence,
 )
 from agents.risk.results import _make_clause_risk
+from utils.mapping import as_mapping as _as_mapping
 
 
 def _score_validation_findings(
