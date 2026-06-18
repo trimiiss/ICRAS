@@ -4,6 +4,7 @@ from typing import Any, Mapping, Optional, Sequence
 
 from schemas.common import EvidencePointer
 from schemas.extracted_clause import ExtractedClause
+from utils.evidence import extract_evidence_records as _shared_extract_evidence_records
 from utils.text import (
     is_non_empty as _is_non_empty,
     optional_int as _optional_int,
@@ -98,18 +99,4 @@ def _extract_evidence_records(
     evidence_index: Optional[Mapping[str, Any]],
 ) -> list[Mapping[str, Any]]:
     """Read evidence records from accepted evidence index shapes."""
-    if evidence_index is None:
-        return []
-
-    candidate: Any = evidence_index
-    if "evidence_index" in evidence_index:
-        candidate = evidence_index["evidence_index"]
-
-    if not isinstance(candidate, Mapping):
-        return []
-
-    records = candidate.get("records")
-    if not isinstance(records, list):
-        return []
-
-    return [record for record in records if isinstance(record, Mapping)]
+    return _shared_extract_evidence_records(evidence_index)

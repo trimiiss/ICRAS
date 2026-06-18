@@ -2,8 +2,8 @@
 
 from pathlib import Path
 
-from agents.anomaly_agent import run_anomaly_review
-from agents.compliance_agent import run_compliance_review
+from agents.anomaly import run_anomaly_review
+from agents.compliance import run_compliance_review
 from agents.counterparty import run_counterparty_check
 from agents.extraction import run_extraction
 from agents.intake import run_intake

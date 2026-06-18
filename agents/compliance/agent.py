@@ -3,12 +3,19 @@
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
+from agents.compliance.constants import (
+    CHECKED_RULES,
+    GDPR_OBLIGATION_KEYWORDS,
+    GDPR_PRIVACY_TOKENS,
+)
+from agents.compliance.errors import ComplianceAgentError
 from schemas.common import EvidencePointer, Severity
 from schemas.compliance_result import ComplianceResult
 from schemas.extracted_clause import ExtractedClause
 from schemas.finding import Finding
 from utils.artifacts import validate_run_dir, write_model_json
 from utils.clauses import coerce_extracted_clauses
+from utils.evidence import extract_evidence_records
 from utils.mapping import as_mapping as _as_mapping
 from utils.text import (
     is_non_empty as _is_non_empty,
@@ -18,42 +25,6 @@ from utils.text import (
     truncate as _truncate,
 )
 from utils.run_manager import append_audit_event
-
-
-class ComplianceAgentError(Exception):
-    """Raised when compliance review cannot complete."""
-
-
-GDPR_PRIVACY_TOKENS = (
-    "personal data",
-    "privacy",
-    "data processing",
-    "data protection",
-)
-
-GDPR_OBLIGATION_KEYWORDS: dict[str, tuple[str, ...]] = {
-    "data_processing_terms": (
-        "data processing terms",
-        "process personal data",
-        "processing personal data",
-        "processor",
-        "controller",
-    ),
-    "cross_border_transfer_controls": (
-        "cross-border transfer",
-        "cross border transfer",
-        "international transfer",
-        "standard contractual clauses",
-        "transfer controls",
-    ),
-    "data_subject_rights": (
-        "data subject rights",
-        "data subject",
-        "access",
-        "erasure",
-        "rectification",
-    ),
-}
 
 
 def run_compliance_review(
@@ -73,18 +44,13 @@ def run_compliance_review(
         else None
     )
     clauses = _coerce_clauses(extracted_contract.get("clauses", []))
-    evidence_records = _extract_evidence_records(evidence_index)
+    evidence_records = extract_evidence_records(evidence_index)
     run_id = str(
         context.get("run_id")
         or extracted_contract.get("run_id")
         or "unknown-run"
     )
 
-    checked_rules = [
-        "high_risk_jurisdiction",
-        "gdpr_requirements",
-        "jurisdiction_required_clauses",
-    ]
     findings: list[Finding] = []
     _check_high_risk_jurisdiction(
         context=context,
@@ -108,7 +74,7 @@ def run_compliance_review(
     result = ComplianceResult(
         run_id=run_id,
         findings=findings,
-        checked_rules=checked_rules,
+        checked_rules=CHECKED_RULES,
         requires_compliance_review=any(
             finding.manual_review_required
             or finding.severity in {Severity.HIGH, Severity.CRITICAL}
@@ -133,7 +99,7 @@ def run_compliance_review(
                 "message": "Compliance Agent checked GDPR and jurisdiction rules.",
                 "artifacts": [output_path.name],
                 "finding_count": len(findings),
-                "checked_rules": checked_rules,
+                "checked_rules": CHECKED_RULES,
                 "requires_compliance_review": result.requires_compliance_review,
             },
         )
@@ -539,26 +505,6 @@ def _make_finding(
         manual_review_required=True,
         risk_engine_ready=True,
     )
-
-
-def _extract_evidence_records(
-    evidence_index: Mapping[str, Any] | None,
-) -> list[Mapping[str, Any]]:
-    """Read evidence records from accepted evidence index shapes."""
-    if evidence_index is None:
-        return []
-
-    candidate: Any = evidence_index
-    if "evidence_index" in evidence_index:
-        candidate = evidence_index["evidence_index"]
-
-    if not isinstance(candidate, Mapping):
-        return []
-
-    records = candidate.get("records")
-    if not isinstance(records, list):
-        return []
-    return [record for record in records if isinstance(record, Mapping)]
 
 
 def _severity_from_value(value: Any, default: Severity) -> Severity:
