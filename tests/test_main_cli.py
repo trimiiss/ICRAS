@@ -46,6 +46,7 @@ def test_valid_bundle_creates_intake_evidence_extraction_and_validation_artifact
     assert "validation_findings.json" in result.stdout
     assert "clause_analysis.json" in result.stdout
     assert "compliance_findings.json" in result.stdout
+    assert "anomaly_findings.json" in result.stdout
     assert "audit_log.md" in result.stdout
     assert "counterparty_resolution.json" in result.stdout
     assert "obligations.csv" in result.stdout
@@ -66,6 +67,7 @@ def test_valid_bundle_creates_intake_evidence_extraction_and_validation_artifact
     assert (run_dir / "validation_findings.json").is_file()
     assert (run_dir / "clause_analysis.json").is_file()
     assert (run_dir / "compliance_findings.json").is_file()
+    assert (run_dir / "anomaly_findings.json").is_file()
     assert (run_dir / "counterparty_resolution.json").is_file()
     assert (run_dir / "obligations.csv").is_file()
     assert (run_dir / "final_findings.json").is_file()
@@ -100,6 +102,11 @@ def test_valid_bundle_creates_intake_evidence_extraction_and_validation_artifact
         (run_dir / "compliance_findings.json").read_text(encoding="utf-8")
     )
     assert "checked_rules" in compliance_findings
+
+    anomaly_findings = json.loads(
+        (run_dir / "anomaly_findings.json").read_text(encoding="utf-8")
+    )
+    assert "checked_rules" in anomaly_findings
 
     final_findings = json.loads(
         (run_dir / "final_findings.json").read_text(encoding="utf-8")
@@ -233,6 +240,7 @@ def test_net90_services_demo_prints_finance_route(tmp_path: Path) -> None:
         "validation_findings.json",
         "clause_analysis.json",
         "compliance_findings.json",
+        "anomaly_findings.json",
         "approval_packet.json",
         "posting_payload.json",
         "metrics.json",

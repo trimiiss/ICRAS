@@ -6,6 +6,7 @@ from schemas.approval_packet import (
     ApprovalRoute,
     ApprovalStatus,
 )
+from schemas.anomaly_result import AnomalyResult
 from schemas.common import ConfidenceScore, EvidencePointer, Severity
 from schemas.compliance_result import ComplianceResult
 from schemas.context_packet import ContextPacket
@@ -61,6 +62,7 @@ __all__ = [
     "Severity",
     "EvidencePointer",
     "ConfidenceScore",
+    "AnomalyResult",
     "ComplianceResult",
     "ContextPacket",
     "CounterpartyMatch",

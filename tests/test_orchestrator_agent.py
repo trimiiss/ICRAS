@@ -108,6 +108,32 @@ def test_agent_h_deduplicates_and_sorts_findings_by_severity() -> None:
     assert findings[1].finding_id == "CPY-001"
 
 
+def test_agent_h_merges_anomaly_findings() -> None:
+    """Anomaly results should be included in Agent H final findings."""
+    findings = _merge_deduplicate_sort_findings(
+        run_id="run-1",
+        context={"contract_file": "contract.pdf"},
+        validation_result={"findings": []},
+        risk_result={"findings": []},
+        counterparty_resolution={"matches": []},
+        anomaly_result={
+            "findings": [
+                _finding(
+                    "ANM-001",
+                    "HIGH",
+                    "Contradictory payment terms",
+                    field_name="payment_terms",
+                    issue_type="contradictory_payment_terms",
+                )
+            ]
+        },
+    )
+
+    assert len(findings) == 1
+    assert findings[0].finding_id == "ANM-001"
+    assert findings[0].issue_type == "contradictory_payment_terms"
+
+
 def test_agent_h_routes_ticket_exception_categories_from_policy() -> None:
     """Each routing-table case should map through approval_policy.yaml."""
     context = {
@@ -183,6 +209,39 @@ def test_agent_h_routes_ticket_exception_categories_from_policy() -> None:
             ExceptionCategory.COMPLIANCE,
             "compliance_officer",
         ),
+        (
+            _finding(
+                "F-007",
+                "HIGH",
+                "Contradictory payment terms",
+                field_name="payment_terms",
+                issue_type="contradictory_payment_terms",
+            ),
+            ExceptionCategory.FINANCE,
+            "finance_manager",
+        ),
+        (
+            _finding(
+                "F-008",
+                "HIGH",
+                "Duplicate clauses contain different values",
+                field_name="liability_cap",
+                issue_type="duplicate_clause_value_conflict",
+            ),
+            ExceptionCategory.LEGAL,
+            "legal_counsel",
+        ),
+        (
+            _finding(
+                "F-009",
+                "HIGH",
+                "Unusual liability exposure",
+                field_name="liability_cap",
+                issue_type="unusual_contract_pattern",
+            ),
+            ExceptionCategory.LEGAL,
+            "legal_counsel",
+        ),
     ]
 
     for raw_finding, expected_category, expected_approver in cases:
@@ -235,6 +294,7 @@ def test_run_pipeline_executes_agent_h_graph(tmp_path: Path, monkeypatch) -> Non
     assert metrics["total_processing_time_seconds"] == metrics["duration_seconds"]
     assert metrics["extraction_clause_count"] == 10
     assert "compliance_finding_count" in metrics
+    assert "anomaly_finding_count" in metrics
     assert "ocr_used" in metrics
     assert metrics["exception_count"] == len(result["approval_packet"]["exceptions"])
     assert metrics["exception_rate_percent"] >= 0.0
@@ -273,6 +333,7 @@ def test_run_pipeline_executes_agent_h_graph(tmp_path: Path, monkeypatch) -> Non
     assert "create_run_completed" in audit_log
     assert "extraction_completed" in audit_log
     assert "compliance_completed" in audit_log
+    assert "anomaly_completed" in audit_log
     assert "OCR Used" in audit_log
     assert "agent_h_finalize_completed" in audit_log
     assert "Started At" in audit_log
@@ -308,7 +369,8 @@ def test_run_pipeline_executes_agent_h_graph(tmp_path: Path, monkeypatch) -> Non
     assert steps.index("counterparty") < steps.index("risk_scoring")
     assert steps.index("validation") < steps.index("risk_scoring")
     assert steps.index("risk_scoring") < steps.index("compliance")
-    assert steps.index("compliance") < steps.index("obligation_register")
+    assert steps.index("compliance") < steps.index("anomaly")
+    assert steps.index("anomaly") < steps.index("obligation_register")
     assert steps[-1] == "agent_h_finalize"
 
 

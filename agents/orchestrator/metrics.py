@@ -32,6 +32,7 @@ def build_metrics(
     validation_result = require_state_mapping(state, "validation_result")
     risk_result = require_state_mapping(state, "risk_result")
     compliance_result = require_state_mapping(state, "compliance_result")
+    anomaly_result = require_state_mapping(state, "anomaly_result")
     counterparty_resolution = require_state_mapping(state, "counterparty_resolution")
     obligation_register = require_state_mapping(state, "obligation_register")
     clauses = extracted_contract.get("clauses", [])
@@ -65,6 +66,7 @@ def build_metrics(
         validation_finding_count=safe_len(validation_result.get("findings")),
         risk_finding_count=safe_len(risk_result.get("findings")),
         compliance_finding_count=safe_len(compliance_result.get("findings")),
+        anomaly_finding_count=safe_len(anomaly_result.get("findings")),
         counterparty_exception_count=len(
             counterparty_findings(
                 run_id=require_state_str(state, "run_id"),

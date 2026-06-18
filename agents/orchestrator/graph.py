@@ -15,6 +15,7 @@ from agents.orchestrator.metrics import (
     safe_len,
 )
 from agents.orchestrator.nodes import (
+    anomaly_node,
     compliance_node,
     counterparty_node,
     create_run_node,
@@ -45,6 +46,7 @@ def build_pipeline_graph() -> Any:
     builder.add_node("validation", _pipeline_node("validation", "validation_agent", validation_node))
     builder.add_node("risk_scoring", _pipeline_node("risk_scoring", "risk_agent", risk_node))
     builder.add_node("compliance", _pipeline_node("compliance", "compliance_agent", compliance_node))
+    builder.add_node("anomaly", _pipeline_node("anomaly", "anomaly_agent", anomaly_node))
     builder.add_node(
         "obligation_register",
         _pipeline_node("obligation_register", "orchestrator_agent", obligation_register_node),
@@ -61,7 +63,8 @@ def build_pipeline_graph() -> Any:
     builder.add_edge("counterparty", "risk_scoring")
     builder.add_edge("validation", "risk_scoring")
     builder.add_edge("risk_scoring", "compliance")
-    builder.add_edge("compliance", "obligation_register")
+    builder.add_edge("compliance", "anomaly")
+    builder.add_edge("anomaly", "obligation_register")
     builder.add_edge("obligation_register", "agent_h_finalize")
     builder.add_edge("agent_h_finalize", END)
     return builder.compile()
@@ -260,6 +263,7 @@ def _audit_input_paths(step_name: str, state: PipelineState) -> dict[str, str]:
             "validation",
             "risk_scoring",
             "obligation_register",
+            "anomaly",
             "agent_h_finalize",
         }:
             contract_path = bundle_data.get("contract_path")
