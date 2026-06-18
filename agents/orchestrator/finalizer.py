@@ -9,13 +9,13 @@ from agents.orchestrator.approval_routing import (
     build_approval_routes,
     triage_findings,
 )
-from agents.orchestrator.errors import OrchestratorAgentError
 from agents.orchestrator.finding_merger import (
     merge_deduplicate_sort_findings,
     overall_severity as highest_overall_severity,
 )
 from agents.orchestrator.markdown import write_exceptions_markdown
 from agents.orchestrator.metrics import build_metrics
+from agents.orchestrator.state import require_state_mapping, require_state_str
 from schemas.approval_packet import ApprovalDecision, ApprovalPacket, ApprovalStatus
 from schemas.common import Severity
 from schemas.final_artifacts import FinalFindingsResult
@@ -29,14 +29,14 @@ from utils.run_manager import append_audit_event, update_run_status
 
 def finalize_pipeline(state: Mapping[str, Any]) -> dict[str, Any]:
     """Finalize findings, routing, and downstream artifacts."""
-    run_id = _require_state_str(state, "run_id")
-    run_dir = Path(_require_state_str(state, "run_dir"))
-    run_info = _require_state_mapping(state, "run_info")
-    context = _require_state_mapping(state, "context_packet")
-    document_inventory = _require_state_mapping(state, "document_inventory")
-    validation_result = _require_state_mapping(state, "validation_result")
-    risk_result = _require_state_mapping(state, "risk_result")
-    counterparty_resolution = _require_state_mapping(state, "counterparty_resolution")
+    run_id = require_state_str(state, "run_id")
+    run_dir = Path(require_state_str(state, "run_dir"))
+    run_info = require_state_mapping(state, "run_info")
+    context = require_state_mapping(state, "context_packet")
+    document_inventory = require_state_mapping(state, "document_inventory")
+    validation_result = require_state_mapping(state, "validation_result")
+    risk_result = require_state_mapping(state, "risk_result")
+    counterparty_resolution = require_state_mapping(state, "counterparty_resolution")
     final_findings = merge_deduplicate_sort_findings(
         run_id=run_id,
         context=context,
@@ -171,27 +171,6 @@ def finalize_pipeline(state: Mapping[str, Any]) -> dict[str, Any]:
         "artifact_paths": artifact_paths,
     }
 
-
-def _require_state_str(state: Mapping[str, Any], key: str) -> str:
-    """Return a required string from graph state."""
-    value = state.get(key)
-    if not isinstance(value, str) or not value:
-        raise OrchestratorAgentError(
-            f"Pipeline state is missing required string '{key}'."
-        )
-    return value
-
-
-def _require_state_mapping(state: Mapping[str, Any], key: str) -> dict[str, Any]:
-    """Return a required mapping from graph state."""
-    value = state.get(key)
-    if not isinstance(value, Mapping):
-        raise OrchestratorAgentError(
-            f"Pipeline state is missing required mapping '{key}'."
-        )
-    return dict(value)
-
-
 def _final_risk_summary(overall_severity: Severity, findings: Sequence[Finding]) -> str:
     """Create a deterministic final risk summary."""
     if not findings:
@@ -215,4 +194,3 @@ def _merge_dicts(left: Mapping[str, str], right: Mapping[str, str]) -> dict[str,
     merged = dict(left)
     merged.update(right)
     return merged
-

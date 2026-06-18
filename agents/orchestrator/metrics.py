@@ -3,8 +3,8 @@
 from datetime import datetime, timezone
 from typing import Any, Mapping, Optional, Sequence
 
-from agents.orchestrator.errors import OrchestratorAgentError
 from agents.orchestrator.finding_merger import counterparty_findings
+from agents.orchestrator.state import require_state_mapping, require_state_str
 from schemas.common import Severity
 from schemas.exception_triage import ExceptionTriageItem
 from schemas.final_artifacts import ConfidenceDistribution, PipelineMetrics
@@ -26,13 +26,13 @@ def build_metrics(
     artifact_paths: Mapping[str, str],
 ) -> PipelineMetrics:
     """Build final pipeline metrics."""
-    run_info = _require_state_mapping(state, "run_info")
+    run_info = require_state_mapping(state, "run_info")
     metadata = _as_mapping(run_info.get("metadata"))
-    extracted_contract = _require_state_mapping(state, "extracted_contract")
-    validation_result = _require_state_mapping(state, "validation_result")
-    risk_result = _require_state_mapping(state, "risk_result")
-    counterparty_resolution = _require_state_mapping(state, "counterparty_resolution")
-    obligation_register = _require_state_mapping(state, "obligation_register")
+    extracted_contract = require_state_mapping(state, "extracted_contract")
+    validation_result = require_state_mapping(state, "validation_result")
+    risk_result = require_state_mapping(state, "risk_result")
+    counterparty_resolution = require_state_mapping(state, "counterparty_resolution")
+    obligation_register = require_state_mapping(state, "obligation_register")
     clauses = extracted_contract.get("clauses", [])
     clause_count = len(clauses) if isinstance(clauses, list) else 0
     duration_seconds = _duration_since(metadata.get("created_at"))
@@ -55,7 +55,7 @@ def build_metrics(
         else round(clause_confidence_distribution.average_score * 100, 2)
     )
     return PipelineMetrics(
-        run_id=_require_state_str(state, "run_id"),
+        run_id=require_state_str(state, "run_id"),
         status=status,
         duration_seconds=duration_seconds,
         total_processing_time_seconds=duration_seconds,
@@ -64,8 +64,8 @@ def build_metrics(
         risk_finding_count=safe_len(risk_result.get("findings")),
         counterparty_exception_count=len(
             counterparty_findings(
-                run_id=_require_state_str(state, "run_id"),
-                context=_require_state_mapping(state, "context_packet"),
+                run_id=require_state_str(state, "run_id"),
+                context=require_state_mapping(state, "context_packet"),
                 counterparty_resolution=counterparty_resolution,
             )
         ),
@@ -216,27 +216,6 @@ def _duration_since(created_at: Any) -> float:
         start = start.replace(tzinfo=timezone.utc)
     return max(0.0, round((datetime.now(timezone.utc) - start).total_seconds(), 6))
 
-
-def _require_state_str(state: Mapping[str, Any], key: str) -> str:
-    """Return a required string from graph state."""
-    value = state.get(key)
-    if not isinstance(value, str) or not value:
-        raise OrchestratorAgentError(
-            f"Pipeline state is missing required string '{key}'."
-        )
-    return value
-
-
-def _require_state_mapping(state: Mapping[str, Any], key: str) -> dict[str, Any]:
-    """Return a required mapping from graph state."""
-    value = state.get(key)
-    if not isinstance(value, Mapping):
-        raise OrchestratorAgentError(
-            f"Pipeline state is missing required mapping '{key}'."
-        )
-    return dict(value)
-
-
 def _optional_str(value: Any) -> Optional[str]:
     """Return value as a string when non-empty, else None."""
     if value is None:
@@ -244,4 +223,3 @@ def _optional_str(value: Any) -> Optional[str]:
     if isinstance(value, str) and not value.strip():
         return None
     return str(value)
-

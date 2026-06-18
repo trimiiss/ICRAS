@@ -3,6 +3,7 @@
 from typing import Any, Mapping
 
 from agents.extraction.errors import ExtractionAgentError
+from utils.text import truncate
 
 
 def require_str(data: Mapping[str, Any], key: str) -> str:
@@ -92,7 +93,4 @@ def union_bboxes(bboxes: list[list[float]]) -> list[float] | None:
 
 def make_excerpt(text: str, max_chars: int = 300) -> str:
     """Return a compact source excerpt."""
-    compact = " ".join(text.split())
-    if len(compact) <= max_chars:
-        return compact
-    return compact[: max_chars - 3].rstrip() + "..."
+    return truncate(text, max_chars=max_chars)

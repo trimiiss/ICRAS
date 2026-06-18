@@ -15,6 +15,7 @@ from schemas.posting_payload import (
     PostingPayload,
     RiskPostingData,
 )
+from utils.collections import ordered_unique
 
 
 def build_posting_payload(
@@ -163,10 +164,14 @@ def _artifact_type(path: str) -> str:
 
 def _next_approvers(approval_routes: Sequence[ApprovalRoute]) -> list[str]:
     """Return flattened unique approvers in route order."""
-    return _ordered_unique(
-        approver
-        for route in approval_routes
-        for approver in route.approvers
+    return ordered_unique(
+        (
+            approver
+            for route in approval_routes
+            for approver in route.approvers
+        ),
+        drop_blank=False,
+        strip=False,
     )
 
 
@@ -211,15 +216,3 @@ def _contract_id(context: Mapping[str, Any], document_id: Optional[str]) -> str:
         ]
         if part
     )
-
-
-def _ordered_unique(values: Sequence[str] | Any) -> list[str]:
-    """Return unique string values while preserving first-seen order."""
-    seen: set[str] = set()
-    ordered: list[str] = []
-    for raw_value in values:
-        value = str(raw_value)
-        if value not in seen:
-            seen.add(value)
-            ordered.append(value)
-    return ordered

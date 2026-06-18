@@ -14,7 +14,6 @@ from utils.text import (
 )
 
 from .constants import (
-    DATE_FORMATS,
     OBLIGATION_CUES,
     OBLIGATION_TYPE_BY_CLAUSE,
     RESPONSIBLE_PARTIES,
@@ -140,7 +139,7 @@ def _extract_due_date(text: str) -> Optional[str]:
         match = re.search(pattern, text, re.IGNORECASE)
         if match is None:
             continue
-        normalized = normalize_date(match.group(0), date_formats=DATE_FORMATS)
+        normalized = normalize_date(match.group(0))
         if normalized is not None:
             return normalized
     return None
@@ -191,4 +190,3 @@ def _clause_evidence(
         clause_reference=clause.section_reference or clause.evidence.clause_reference,
         excerpt=_truncate(clause.text),
     )
-

@@ -61,18 +61,6 @@ RESPONSIBLE_PARTIES: tuple[str, ...] = (
     "Contractor",
 )
 
-DATE_FORMATS: tuple[str, ...] = (
-    "%Y-%m-%d",
-    "%Y/%m/%d",
-    "%Y.%m.%d",
-    "%m/%d/%Y",
-    "%m-%d-%Y",
-    "%B %d, %Y",
-    "%b %d, %Y",
-    "%d %B %Y",
-    "%d %b %Y",
-)
-
 TIMING_PATTERNS: tuple[str, ...] = (
     r"\bwithin\s+\d+\s+(?:business\s+)?days?\b",
     r"\b\d+\s+days?\s+(?:written\s+)?notice\b",

@@ -1,7 +1,6 @@
 """Synthetic extraction fallback fixture support."""
 
 import json
-import re
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -15,6 +14,7 @@ from agents.extraction.constants import (
 )
 from agents.extraction.errors import ExtractionAgentError
 from agents.extraction.helpers import evidence_id_for_page, make_excerpt
+from utils.text import normalize_key
 
 
 def fallback_reason(clauses: list[ExtractedClause]) -> str | None:
@@ -110,7 +110,7 @@ def _fixture_key(value: Any) -> str | None:
     if not isinstance(value, str):
         return None
 
-    key = re.sub(r"[^a-z0-9]+", "_", value.casefold()).strip("_")
+    key = normalize_key(value)
     return key or None
 
 

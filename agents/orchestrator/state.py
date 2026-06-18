@@ -1,6 +1,8 @@
 """Pipeline state contracts and workflow constants."""
 
-from typing import Annotated, Any, Optional, TypedDict
+from typing import Annotated, Any, Mapping, Optional, TypedDict
+
+from agents.orchestrator.errors import OrchestratorAgentError
 
 
 def merge_dicts(left: Optional[dict[str, str]], right: Optional[dict[str, str]]) -> dict[str, str]:
@@ -16,6 +18,26 @@ def merge_dicts(left: Optional[dict[str, str]], right: Optional[dict[str, str]])
 def append_lists(left: Optional[list[dict[str, Any]]], right: Optional[list[dict[str, Any]]]) -> list[dict[str, Any]]:
     """Append graph state event lists from parallel branches."""
     return [*(left or []), *(right or [])]
+
+
+def require_state_str(state: Mapping[str, Any], key: str) -> str:
+    """Return a required string from graph state."""
+    value = state.get(key)
+    if not isinstance(value, str) or not value:
+        raise OrchestratorAgentError(
+            f"Pipeline state is missing required string '{key}'."
+        )
+    return value
+
+
+def require_state_mapping(state: Mapping[str, Any], key: str) -> dict[str, Any]:
+    """Return a required mapping from graph state."""
+    value = state.get(key)
+    if not isinstance(value, Mapping):
+        raise OrchestratorAgentError(
+            f"Pipeline state is missing required mapping '{key}'."
+        )
+    return dict(value)
 
 
 class PipelineState(TypedDict, total=False):

@@ -1,12 +1,13 @@
 """Approval routing and exception triage for workflow orchestration."""
 
-from typing import Any, Iterable, Mapping, Optional, Sequence
+from typing import Any, Mapping, Optional, Sequence
 
 from agents.orchestrator.errors import OrchestratorAgentError
 from schemas.approval_packet import ApprovalRoute, ApprovalStatus
 from schemas.common import Severity
 from schemas.exception_triage import ExceptionTriageItem
 from schemas.finding import Finding
+from utils.collections import ordered_unique
 from utils.mapping import as_mapping as _as_mapping
 from utils.text import normalize_key as _normalize_key
 
@@ -80,8 +81,8 @@ def build_approval_routes(
             },
         )
         data["finding_ids"].append(exception.finding_id)
-        data["reasons"] = _ordered_unique([*data["reasons"], exception.reason])
-        data["approvers"] = _ordered_unique(
+        data["reasons"] = ordered_unique([*data["reasons"], exception.reason])
+        data["approvers"] = ordered_unique(
             [
                 *data["approvers"],
                 exception.approver or "",
@@ -134,7 +135,7 @@ def _severity_required_approvers(
     approvers = severity_threshold.get("required_approvers", [])
     if not isinstance(approvers, list):
         return []
-    return _ordered_unique(str(approver) for approver in approvers)
+    return ordered_unique(str(approver) for approver in approvers)
 
 
 def _exception_route_rules(approval_policy: Mapping[str, Any]) -> list[Mapping[str, Any]]:
@@ -253,15 +254,4 @@ def _normalized_policy_values(raw_values: Any) -> set[str]:
         if str(value).strip()
     }
 
-
-def _ordered_unique(values: Iterable[str]) -> list[str]:
-    """Return values in first-seen order with blanks removed."""
-    seen: set[str] = set()
-    result: list[str] = []
-    for value in values:
-        cleaned = str(value).strip()
-        if cleaned and cleaned not in seen:
-            seen.add(cleaned)
-            result.append(cleaned)
-    return result
 

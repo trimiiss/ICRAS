@@ -8,6 +8,7 @@ import pymupdf
 from schemas.evidence_index import EvidenceIndex, EvidenceRecord, EvidenceWarning
 from utils.artifacts import validate_run_dir, write_model_json
 from utils.run_manager import append_audit_event
+from utils.text import truncate
 
 
 class EvidenceIndexError(Exception):
@@ -190,6 +191,4 @@ def _normalize_text(text: str) -> str:
 
 def _make_excerpt(text: str, max_chars: int = 500) -> str:
     """Return a compact evidence snippet from page text."""
-    if len(text) <= max_chars:
-        return text
-    return text[: max_chars - 3].rstrip() + "..."
+    return truncate(text, max_chars=max_chars)

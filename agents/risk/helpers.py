@@ -7,10 +7,11 @@ from schemas.common import EvidencePointer, Severity
 from schemas.extracted_clause import ExtractedClause
 from schemas.finding import Finding
 from schemas.risk_result import ClauseRisk
-from agents.risk.constants import CLAUSE_ALIASES, KNOWN_JURISDICTIONS, SEVERITY_RANK
+from agents.risk.constants import CLAUSE_ALIASES, KNOWN_JURISDICTIONS
 from agents.risk.errors import RiskAgentError
 from utils.clauses import coerce_extracted_clauses
 from utils.mapping import as_mapping as _as_mapping
+from utils.severity import highest_severity
 from utils.text import (
     is_non_empty as _is_non_empty,
     normalize_key as _normalize_key,
@@ -175,10 +176,7 @@ def _minor_variance_severity(configured_severity: Severity) -> Severity:
 
 def _overall_severity(severities: Iterable[Severity]) -> Severity:
     """Return highest severity, defaulting to LOW."""
-    severity_list = list(severities)
-    if not severity_list:
-        return Severity.LOW
-    return max(severity_list, key=lambda severity: SEVERITY_RANK[severity])
+    return highest_severity(severities)
 
 
 def _summary(overall_severity: Severity, risks: Sequence[ClauseRisk]) -> str:

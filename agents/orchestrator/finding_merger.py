@@ -5,15 +5,8 @@ from typing import Any, Mapping, Optional, Sequence
 from agents.orchestrator.errors import OrchestratorAgentError
 from schemas.common import EvidencePointer, Severity
 from schemas.finding import Finding
+from utils.severity import SEVERITY_RANK, highest_severity
 from utils.text import normalize_key as _normalize_key
-
-
-SEVERITY_RANK: dict[Severity, int] = {
-    Severity.LOW: 1,
-    Severity.MEDIUM: 2,
-    Severity.HIGH: 3,
-    Severity.CRITICAL: 4,
-}
 
 
 def merge_deduplicate_sort_findings(
@@ -123,9 +116,7 @@ def counterparty_findings(
 
 def overall_severity(severities: Sequence[Severity]) -> Severity:
     """Return the highest severity, defaulting to LOW."""
-    if not severities:
-        return Severity.LOW
-    return max(severities, key=lambda severity: SEVERITY_RANK[severity])
+    return highest_severity(severities)
 
 
 def _coerce_finding_list(

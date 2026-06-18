@@ -1,7 +1,6 @@
 """Node bodies for the ICRAS orchestrator graph."""
 
 from pathlib import Path
-from typing import Any, Mapping
 
 from agents.counterparty import run_counterparty_check
 from agents.extraction import run_extraction
@@ -9,9 +8,12 @@ from agents.intake import run_intake
 from agents.obligation import run_obligation_register
 from agents.risk import run_risk_assessment
 from agents.validation import run_validation
-from agents.orchestrator.errors import OrchestratorAgentError
 from agents.orchestrator.finalizer import finalize_pipeline
-from agents.orchestrator.state import PipelineState
+from agents.orchestrator.state import (
+    PipelineState,
+    require_state_mapping,
+    require_state_str,
+)
 from utils.bundle_loader import load_bundle
 from utils.evidence_indexer import build_evidence_index
 from utils.run_manager import create_run_folder
@@ -146,23 +148,3 @@ def obligation_register_node(state: PipelineState) -> PipelineState:
 def finalize_node(state: PipelineState) -> PipelineState:
     """Finalize findings, routing, and downstream artifacts."""
     return finalize_pipeline(state)
-
-
-def require_state_str(state: Mapping[str, Any], key: str) -> str:
-    """Return a required string from graph state."""
-    value = state.get(key)
-    if not isinstance(value, str) or not value:
-        raise OrchestratorAgentError(
-            f"Pipeline state is missing required string '{key}'."
-        )
-    return value
-
-
-def require_state_mapping(state: Mapping[str, Any], key: str) -> dict[str, Any]:
-    """Return a required mapping from graph state."""
-    value = state.get(key)
-    if not isinstance(value, Mapping):
-        raise OrchestratorAgentError(
-            f"Pipeline state is missing required mapping '{key}'."
-        )
-    return dict(value)
