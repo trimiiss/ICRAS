@@ -1,18 +1,28 @@
 """Anomaly Agent for conflicting and unusual contract terms."""
 
-from dataclasses import dataclass
 from datetime import date
 import re
 from pathlib import Path
 from typing import Any, Mapping, Optional, Sequence
 
+from agents.anomaly.constants import (
+    CHECKED_RULES,
+    DEDICATED_CONFLICT_FIELDS,
+    FIELD_ALIASES,
+    KNOWN_GOVERNING_LAW_JURISDICTIONS,
+    UNUSUAL_PATTERNS,
+)
+from agents.anomaly.errors import AnomalyAgentError
+from agents.anomaly.models import DateObservation
 from schemas.anomaly_result import AnomalyResult
 from schemas.common import EvidencePointer, Severity
 from schemas.extracted_clause import ExtractedClause
 from schemas.finding import Finding
 from utils.artifacts import validate_run_dir, write_model_json
 from utils.clauses import coerce_extracted_clauses
+from utils.collections import ordered_unique
 from utils.dates import extract_normalized_date, normalize_date
+from utils.evidence import extract_evidence_records
 from utils.payment_terms import extract_payment_days
 from utils.text import (
     is_non_empty as _is_non_empty,
@@ -22,171 +32,6 @@ from utils.text import (
     truncate as _truncate,
 )
 from utils.run_manager import append_audit_event
-
-
-class AnomalyAgentError(Exception):
-    """Raised when anomaly review cannot complete."""
-
-
-@dataclass(frozen=True)
-class DateObservation:
-    """One normalized date plus the evidence that supports it."""
-
-    field_name: str
-    normalized_date: str
-    evidence: EvidencePointer
-    source_text: str
-
-
-@dataclass(frozen=True)
-class UnusualPattern:
-    """A high-signal unusual contract pattern."""
-
-    pattern_id: str
-    field_name: str
-    title: str
-    description: str
-    regex: str
-    severity: Severity
-    recommendation: str
-
-
-CHECKED_RULES: list[str] = [
-    "conflicting_governing_law",
-    "contradictory_payment_terms",
-    "duplicate_clause_value_conflict",
-    "suspicious_date_ordering",
-    "unusual_contract_pattern",
-]
-
-KNOWN_GOVERNING_LAW_JURISDICTIONS: tuple[str, ...] = (
-    "New York",
-    "Delaware",
-    "California",
-    "Texas",
-    "Florida",
-    "England and Wales",
-    "United Kingdom",
-    "Germany",
-    "France",
-    "India",
-    "Singapore",
-    "Netherlands",
-    "Ireland",
-)
-
-FIELD_ALIASES: dict[str, tuple[str, ...]] = {
-    "governing_law": (
-        "governing_law",
-        "governing law",
-        "jurisdiction",
-        "choice_of_law",
-        "choice of law",
-    ),
-    "payment_terms": (
-        "payment_terms",
-        "payment terms",
-        "payment",
-        "fees",
-        "compensation",
-        "invoice",
-        "invoicing",
-        "billing",
-    ),
-    "effective_date": (
-        "effective_date",
-        "effective date",
-        "commencement_date",
-        "start_date",
-        "agreement_date",
-    ),
-    "expiry_date": (
-        "expiry_date",
-        "expiry date",
-        "expiration_date",
-        "end_date",
-        "contract_end_date",
-        "term_expiry",
-    ),
-    "signature_date": (
-        "signature",
-        "signatures",
-        "execution",
-        "signed",
-        "signature_date",
-    ),
-    "liability_cap": (
-        "liability_cap",
-        "limitation_of_liability",
-        "limited_liability",
-        "liability_limit",
-    ),
-    "auto_renewal": (
-        "auto_renewal",
-        "automatic renewal",
-        "auto renewal",
-        "renewal",
-    ),
-    "termination_terms": (
-        "termination_terms",
-        "termination",
-        "term_and_termination",
-        "term_and_duration",
-    ),
-    "confidentiality": ("confidentiality", "confidential information"),
-    "data_protection": ("data_protection", "privacy", "personal data"),
-    "indemnity": ("indemnity", "indemnification"),
-}
-
-DEDICATED_CONFLICT_FIELDS: set[str] = {"governing_law", "payment_terms"}
-
-UNUSUAL_PATTERNS: tuple[UnusualPattern, ...] = (
-    UnusualPattern(
-        pattern_id="unlimited_liability",
-        field_name="liability_cap",
-        title="Unusual liability exposure",
-        description="The contract appears to include unlimited or uncapped liability.",
-        regex=r"\b(?:unlimited|uncapped)\s+liability\b|\bliability\s+(?:is\s+)?(?:unlimited|uncapped)\b",
-        severity=Severity.HIGH,
-        recommendation="Legal must confirm whether unlimited liability is intended.",
-    ),
-    UnusualPattern(
-        pattern_id="indefinite_auto_renewal",
-        field_name="auto_renewal",
-        title="Unusual indefinite auto-renewal",
-        description="The contract appears to auto-renew indefinitely or perpetually.",
-        regex=r"\bauto(?:matically)?[-\s]?renew\w*\b.{0,100}\b(?:indefinitely|perpetual|forever)\b|\b(?:indefinitely|perpetual|forever)\b.{0,100}\bauto(?:matically)?[-\s]?renew\w*\b",
-        severity=Severity.HIGH,
-        recommendation="Legal must confirm the renewal term and opt-out mechanics.",
-    ),
-    UnusualPattern(
-        pattern_id="unilateral_amendment",
-        field_name="amendment",
-        title="Unusual unilateral amendment right",
-        description="One party may be able to amend the agreement unilaterally.",
-        regex=r"\bmay\s+amend\b.{0,80}\b(?:without\s+notice|sole\s+discretion|unilaterally)\b|\bunilateral(?:ly)?\s+amend",
-        severity=Severity.HIGH,
-        recommendation="Legal must confirm amendment rights and notice requirements.",
-    ),
-    UnusualPattern(
-        pattern_id="no_termination_right",
-        field_name="termination_terms",
-        title="Unusual termination restriction",
-        description="The contract appears to restrict ordinary termination rights.",
-        regex=r"\bmay\s+not\s+terminate\b|\bno\s+(?:right\s+to\s+)?terminate\b",
-        severity=Severity.MEDIUM,
-        recommendation="Legal must confirm whether the termination restriction is acceptable.",
-    ),
-    UnusualPattern(
-        pattern_id="non_compete",
-        field_name="non_compete",
-        title="Unusual non-compete language",
-        description="The contract contains non-compete language that may be unusual for the agreement type.",
-        regex=r"\bnon[-\s]?compete\b|\bshall\s+not\s+compete\b",
-        severity=Severity.HIGH,
-        recommendation="Legal must review enforceability and business impact.",
-    ),
-)
 
 
 def run_anomaly_review(
@@ -206,7 +51,7 @@ def run_anomaly_review(
         else None
     )
     clauses = _coerce_clauses(extracted_contract.get("clauses", []))
-    evidence_records = _extract_evidence_records(evidence_index)
+    evidence_records = extract_evidence_records(evidence_index)
     run_id = str(
         context.get("run_id")
         or extracted_contract.get("run_id")
@@ -569,7 +414,7 @@ def _extract_payment_term_values(text: str) -> list[str]:
         values.append("due-on-receipt")
     if re.search(r"\b(?:prepaid|payment\s+in\s+advance|paid\s+in\s+advance)\b", compact):
         values.append("prepaid")
-    return _ordered_unique(values)
+    return ordered_unique(values)
 
 
 def _canonical_field_name(clause: ExtractedClause) -> Optional[str]:
@@ -794,26 +639,6 @@ def _make_finding(
     )
 
 
-def _extract_evidence_records(
-    evidence_index: Mapping[str, Any] | None,
-) -> list[Mapping[str, Any]]:
-    """Read evidence records from accepted evidence index shapes."""
-    if evidence_index is None:
-        return []
-
-    candidate: Any = evidence_index
-    if "evidence_index" in evidence_index:
-        candidate = evidence_index["evidence_index"]
-
-    if not isinstance(candidate, Mapping):
-        return []
-
-    records = candidate.get("records")
-    if not isinstance(records, list):
-        return []
-    return [record for record in records if isinstance(record, Mapping)]
-
-
 def _get_context_value(
     context: Mapping[str, Any],
     aliases: Sequence[str],
@@ -838,15 +663,6 @@ def _negates_auto_renewal(text: str) -> bool:
             compact,
         )
     )
-
-
-def _ordered_unique(values: Sequence[str]) -> list[str]:
-    """Return unique values in first-seen order."""
-    unique_values: list[str] = []
-    for value in values:
-        if value not in unique_values:
-            unique_values.append(value)
-    return unique_values
 
 
 __all__ = [

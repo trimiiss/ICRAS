@@ -14,8 +14,10 @@ ICRAS runs these functional components in order:
 4. **Counterparty Matching** resolves contract party names against vendor master data.
 5. **Validation** checks required fields, normalizes values, and detects inconsistencies.
 6. **Risk Assessment** scores clauses against playbooks, approval policies, and jurisdiction rules.
-7. **Obligation Tracking** produces a structured register of payments, notices, renewals, compliance duties, and other obligations.
-8. **Workflow Orchestration** coordinates execution, merges findings, routes exceptions, writes final artifacts, and generates a CLM-ready posting payload.
+7. **Compliance Review** checks GDPR obligations and jurisdiction-specific compliance rules.
+8. **Anomaly Detection** flags conflicting terms, suspicious dates, and unusual contract patterns.
+9. **Obligation Tracking** produces a structured register of payments, notices, renewals, compliance duties, and other obligations.
+10. **Workflow Orchestration** coordinates execution, merges findings, routes exceptions, writes final artifacts, and generates a CLM-ready posting payload.
 
 ## Repository Layout
 
@@ -28,6 +30,8 @@ ICRAS runs these functional components in order:
 │   ├── counterparty/               # Party name resolution and vendor matching
 │   ├── validation/                 # Required-field and consistency checks
 │   ├── risk/                       # Clause and policy risk scoring
+│   ├── compliance/                 # GDPR and jurisdiction compliance review
+│   ├── anomaly/                    # Conflict and unusual-pattern detection
 │   ├── obligation/                 # Obligation register generation
 │   └── orchestrator/               # LangGraph workflow and final artifacts
 ├── schemas/                        # Pydantic v2 artifact schemas
@@ -109,6 +113,8 @@ extracted_contract.json
 validation_findings.json
 counterparty_resolution.json
 clause_analysis.json
+compliance_findings.json
+anomaly_findings.json
 obligations.csv
 final_findings.json
 exceptions.md

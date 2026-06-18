@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from agents.anomaly_agent import AnomalyAgentError, run_anomaly_review
+from agents.anomaly import AnomalyAgentError, run_anomaly_review
 
 
 def _run_dir(tmp_path: Path, run_id: str = "anomaly-run") -> Path:

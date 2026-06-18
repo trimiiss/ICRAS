@@ -3,7 +3,7 @@
 import json
 from pathlib import Path
 
-from agents.compliance_agent import run_compliance_review
+from agents.compliance import run_compliance_review
 from agents.orchestrator import _triage_findings
 from schemas.common import Severity
 from schemas.finding import Finding

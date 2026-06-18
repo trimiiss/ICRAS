@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pymupdf
 
-from agents.compliance_agent import run_compliance_review
+from agents.compliance import run_compliance_review
 from agents.extraction import run_extraction
 from agents.intake import run_intake
 from agents.risk import run_risk_assessment
