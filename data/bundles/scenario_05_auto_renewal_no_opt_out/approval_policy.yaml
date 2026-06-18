@@ -1,4 +1,4 @@
-approval_thresholds:
+﻿approval_thresholds:
   LOW:
     auto_approve: true
     required_approvers: []
@@ -79,6 +79,7 @@ exception_routing:
     next_action: Review the source evidence and confirm extracted fields before approval.
     match_issue_types:
     - low_confidence_signature
+    - low_ocr_confidence
     manual_review_required: true
     max_confidence: 1.0
   - name: missing_gdpr_clause
@@ -88,8 +89,17 @@ exception_routing:
     next_action: Compliance must confirm GDPR terms or document why they do not apply.
     match_issue_types:
     - missing_gdpr_clause
+    - missing_gdpr_obligation
+    - missing_compliance_clause
     match_field_names:
     - data_protection
+  - name: missing_compliance_clause
+    category: COMPLIANCE
+    approver: compliance_officer
+    reason: Missing jurisdiction-specific compliance clause requires compliance review.
+    next_action: Compliance must confirm required jurisdiction terms or document why they do not apply.
+    match_issue_types:
+      - missing_compliance_clause
   - name: counterparty_manual_review
     category: MANUAL_REVIEW
     approver: procurement_manager

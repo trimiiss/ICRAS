@@ -15,6 +15,7 @@ from agents.orchestrator.metrics import (
     safe_len,
 )
 from agents.orchestrator.nodes import (
+    compliance_node,
     counterparty_node,
     create_run_node,
     evidence_index_node,
@@ -43,6 +44,7 @@ def build_pipeline_graph() -> Any:
     builder.add_node("counterparty", _pipeline_node("counterparty", "counterparty_agent", counterparty_node))
     builder.add_node("validation", _pipeline_node("validation", "validation_agent", validation_node))
     builder.add_node("risk_scoring", _pipeline_node("risk_scoring", "risk_agent", risk_node))
+    builder.add_node("compliance", _pipeline_node("compliance", "compliance_agent", compliance_node))
     builder.add_node(
         "obligation_register",
         _pipeline_node("obligation_register", "orchestrator_agent", obligation_register_node),
@@ -58,7 +60,8 @@ def build_pipeline_graph() -> Any:
     builder.add_edge("extraction", "validation")
     builder.add_edge("counterparty", "risk_scoring")
     builder.add_edge("validation", "risk_scoring")
-    builder.add_edge("risk_scoring", "obligation_register")
+    builder.add_edge("risk_scoring", "compliance")
+    builder.add_edge("compliance", "obligation_register")
     builder.add_edge("obligation_register", "agent_h_finalize")
     builder.add_edge("agent_h_finalize", END)
     return builder.compile()

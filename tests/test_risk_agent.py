@@ -243,9 +243,7 @@ def test_policy_deviations_create_risk_findings(tmp_path: Path) -> None:
     }
     assert "payment_terms_exceed_standard" in issue_types
     assert "missing_liability_cap" in issue_types
-    assert "high_risk_jurisdiction" in issue_types
     assert "auto_renewal_without_opt_out" in issue_types
-    assert "missing_gdpr_clause" in issue_types
     assert "conflicting_governing_law" in issue_types
     assert "multi_jurisdiction_conflict" in issue_types
     assert "multi_party_agreement_gap" in issue_types

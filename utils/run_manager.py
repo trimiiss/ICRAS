@@ -192,6 +192,7 @@ def _default_config(bundle_path: str) -> Dict[str, Any]:
             "counterparty",
             "validation",
             "risk",
+            "compliance",
             "orchestrator",
         ],
         "orchestration": "langgraph",
@@ -201,6 +202,7 @@ def _default_config(bundle_path: str) -> Dict[str, Any]:
             "extraction",
             "counterparty_and_validation",
             "risk",
+            "compliance",
             "orchestrator",
         ],
         "settings": {

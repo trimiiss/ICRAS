@@ -1,4 +1,4 @@
-# Services Agreement Approval Policy
+﻿# Services Agreement Approval Policy
 approval_thresholds:
   LOW:
     auto_approve: true
@@ -76,6 +76,7 @@ exception_routing:
       next_action: Review the source evidence and confirm extracted fields before approval.
       match_issue_types:
         - low_confidence_signature
+        - low_ocr_confidence
       manual_review_required: true
       max_confidence: 0.75
     - name: conflicting_governing_law
@@ -95,8 +96,17 @@ exception_routing:
       next_action: Compliance must confirm required data protection terms or document why they do not apply.
       match_issue_types:
         - missing_gdpr_clause
+        - missing_gdpr_obligation
+        - missing_compliance_clause
       match_field_names:
         - data_protection
+    - name: missing_compliance_clause
+      category: COMPLIANCE
+      approver: compliance_officer
+      reason: Missing jurisdiction-specific compliance clause requires compliance review.
+      next_action: Compliance must confirm required jurisdiction terms or document why they do not apply.
+      match_issue_types:
+        - missing_compliance_clause
     - name: counterparty_manual_review
       category: MANUAL_REVIEW
       approver: procurement_manager

@@ -31,9 +31,11 @@ def build_metrics(
     extracted_contract = require_state_mapping(state, "extracted_contract")
     validation_result = require_state_mapping(state, "validation_result")
     risk_result = require_state_mapping(state, "risk_result")
+    compliance_result = require_state_mapping(state, "compliance_result")
     counterparty_resolution = require_state_mapping(state, "counterparty_resolution")
     obligation_register = require_state_mapping(state, "obligation_register")
     clauses = extracted_contract.get("clauses", [])
+    ocr_metadata = _as_mapping(extracted_contract.get("ocr_metadata"))
     clause_count = len(clauses) if isinstance(clauses, list) else 0
     duration_seconds = _duration_since(metadata.get("created_at"))
     clause_confidence_distribution = confidence_distribution(
@@ -62,6 +64,7 @@ def build_metrics(
         extraction_clause_count=clause_count,
         validation_finding_count=safe_len(validation_result.get("findings")),
         risk_finding_count=safe_len(risk_result.get("findings")),
+        compliance_finding_count=safe_len(compliance_result.get("findings")),
         counterparty_exception_count=len(
             counterparty_findings(
                 run_id=require_state_str(state, "run_id"),
@@ -78,6 +81,18 @@ def build_metrics(
             str(extracted_contract.get("fallback_reason"))
             if extracted_contract.get("fallback_reason")
             else None
+        ),
+        ocr_used=bool(ocr_metadata.get("used")),
+        ocr_pages_processed=(
+            int(ocr_metadata.get("pages_processed"))
+            if isinstance(ocr_metadata.get("pages_processed"), int)
+            else 0
+        ),
+        ocr_average_confidence=confidence_value(
+            ocr_metadata.get("average_confidence")
+        ),
+        ocr_manual_review_required=bool(
+            ocr_metadata.get("manual_review_required")
         ),
         low_confidence_count=(
             clause_confidence_distribution.low_count

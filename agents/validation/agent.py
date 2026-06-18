@@ -12,6 +12,7 @@ from agents.validation.commercial_field_rules import (
 )
 from agents.validation.consistency_rules import (
     _validate_governing_law_conflicts,
+    _validate_low_ocr_confidence,
     _validate_low_confidence_signatures,
     _validate_multi_party_fields,
     _validate_payment_calculations,
@@ -26,6 +27,7 @@ from agents.validation.identity_field_rules import (
     _validate_party_names,
 )
 from agents.validation.io import (
+    _read_extracted_contract,
     _read_existing_findings,
     _read_extracted_contract_clauses,
 )
@@ -38,6 +40,7 @@ def run_validation(
     clauses: Optional[List[Dict[str, Any]]] = None,
     run_dir: str | Path | None = None,
     evidence_index: Optional[Mapping[str, Any]] = None,
+    extracted_contract: Optional[Mapping[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Validate required contract fields and optionally write the result artifact.
 
@@ -48,6 +51,7 @@ def run_validation(
             ``run_dir`` if available.
         run_dir: Optional run directory where ``validation_findings.json`` is written.
         evidence_index: Optional page-level evidence index for source pointers.
+        extracted_contract: Optional full extraction artifact with OCR metadata.
 
     Returns:
         A dictionary containing the validation result, findings, and artifact paths.
@@ -65,8 +69,21 @@ def run_validation(
         else None
     )
     clause_payload = clauses
+    extracted_contract_payload = (
+        dict(extracted_contract)
+        if isinstance(extracted_contract, Mapping)
+        else _read_extracted_contract(run_path)
+    )
     if clause_payload is None or not clause_payload:
-        clause_payload = _read_extracted_contract_clauses(run_path)
+        if isinstance(extracted_contract_payload, Mapping):
+            raw_clauses = extracted_contract_payload.get("clauses", [])
+            clause_payload = (
+                [dict(clause) for clause in raw_clauses if isinstance(clause, Mapping)]
+                if isinstance(raw_clauses, list)
+                else []
+            )
+        else:
+            clause_payload = _read_extracted_contract_clauses(run_path)
     clause_models = _coerce_clauses(clause_payload)
     evidence_records = _extract_evidence_records(evidence_index)
 
@@ -143,6 +160,12 @@ def run_validation(
     _validate_low_confidence_signatures(
         context=context,
         clauses=clause_models,
+        evidence_records=evidence_records,
+        findings=findings,
+    )
+    _validate_low_ocr_confidence(
+        context=context,
+        extracted_contract=extracted_contract_payload,
         evidence_records=evidence_records,
         findings=findings,
     )

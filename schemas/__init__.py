@@ -7,6 +7,7 @@ from schemas.approval_packet import (
     ApprovalStatus,
 )
 from schemas.common import ConfidenceScore, EvidencePointer, Severity
+from schemas.compliance_result import ComplianceResult
 from schemas.context_packet import ContextPacket
 from schemas.counterparty_result import (
     CounterpartyMatch,
@@ -25,6 +26,8 @@ from schemas.extracted_clause import (
     ExtractedClause,
     ExtractedContract,
     ExtractionWarning,
+    OcrMetadata,
+    OcrPageResult,
 )
 from schemas.finding import Finding
 from schemas.final_artifacts import FinalFindingsResult, PipelineMetrics
@@ -58,6 +61,7 @@ __all__ = [
     "Severity",
     "EvidencePointer",
     "ConfidenceScore",
+    "ComplianceResult",
     "ContextPacket",
     "CounterpartyMatch",
     "CounterpartyResolution",
@@ -74,6 +78,8 @@ __all__ = [
     "ExtractedClause",
     "ExtractedContract",
     "ExtractionWarning",
+    "OcrMetadata",
+    "OcrPageResult",
     "Finding",
     "ObligationRecord",
     "ObligationRegisterResult",

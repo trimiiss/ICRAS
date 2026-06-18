@@ -234,6 +234,8 @@ def test_run_pipeline_executes_agent_h_graph(tmp_path: Path, monkeypatch) -> Non
     assert metrics["status"] == "completed"
     assert metrics["total_processing_time_seconds"] == metrics["duration_seconds"]
     assert metrics["extraction_clause_count"] == 10
+    assert "compliance_finding_count" in metrics
+    assert "ocr_used" in metrics
     assert metrics["exception_count"] == len(result["approval_packet"]["exceptions"])
     assert metrics["exception_rate_percent"] >= 0.0
     assert metrics["throughput_clauses_per_second"] > 0.0
@@ -270,6 +272,8 @@ def test_run_pipeline_executes_agent_h_graph(tmp_path: Path, monkeypatch) -> Non
     assert "## Workflow Order" in audit_log
     assert "create_run_completed" in audit_log
     assert "extraction_completed" in audit_log
+    assert "compliance_completed" in audit_log
+    assert "OCR Used" in audit_log
     assert "agent_h_finalize_completed" in audit_log
     assert "Started At" in audit_log
     assert "Finished At" in audit_log
@@ -303,6 +307,8 @@ def test_run_pipeline_executes_agent_h_graph(tmp_path: Path, monkeypatch) -> Non
     steps = [event["step"] for event in result["step_events"]]
     assert steps.index("counterparty") < steps.index("risk_scoring")
     assert steps.index("validation") < steps.index("risk_scoring")
+    assert steps.index("risk_scoring") < steps.index("compliance")
+    assert steps.index("compliance") < steps.index("obligation_register")
     assert steps[-1] == "agent_h_finalize"
 
 
