@@ -7,6 +7,11 @@ from schemas.approval_packet import (
     ApprovalStatus,
 )
 from schemas.anomaly_result import AnomalyResult
+from schemas.api_contract_review import (
+    ContractReviewMetadata,
+    ContractReviewResponse,
+    UploadedFilePayload,
+)
 from schemas.common import ConfidenceScore, EvidencePointer, Severity
 from schemas.compliance_result import ComplianceResult
 from schemas.context_packet import ContextPacket
@@ -63,6 +68,9 @@ __all__ = [
     "EvidencePointer",
     "ConfidenceScore",
     "AnomalyResult",
+    "ContractReviewMetadata",
+    "ContractReviewResponse",
+    "UploadedFilePayload",
     "ComplianceResult",
     "ContextPacket",
     "CounterpartyMatch",
