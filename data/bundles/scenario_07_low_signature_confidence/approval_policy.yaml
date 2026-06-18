@@ -41,6 +41,7 @@ exception_routing:
     - payment_terms_policy_violation
     - payment_terms_exceed_standard
     - calculation_error
+    - contradictory_payment_terms
     match_field_names:
     - payment_terms
   - name: high_risk_jurisdiction
@@ -119,6 +120,8 @@ exception_routing:
     - minor_variance_from_playbook
     - non_standard_prohibited_clause
     - suspicious_date_ordering
+    - duplicate_clause_value_conflict
+    - unusual_contract_pattern
     - missing_field
     - invalid_field
 approved_payment_terms:

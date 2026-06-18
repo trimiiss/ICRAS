@@ -112,6 +112,7 @@ def write_final_audit_markdown(
         f"- Processing Duration Seconds: {_format_metric(metrics.get('total_processing_time_seconds'))}",
         f"- Extraction Count: {metrics.get('extraction_clause_count', 0)}",
         f"- Compliance Finding Count: {metrics.get('compliance_finding_count', 0)}",
+        f"- Anomaly Finding Count: {metrics.get('anomaly_finding_count', 0)}",
         f"- Exception Count: {metrics.get('exception_count', 0)}",
         f"- Exception Categories: {_format_count_map(exception_categories)}",
         f"- Exception Rate Percent: {_format_metric(metrics.get('exception_rate_percent'))}",

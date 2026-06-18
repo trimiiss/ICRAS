@@ -16,6 +16,7 @@ def merge_deduplicate_sort_findings(
     risk_result: Mapping[str, Any],
     counterparty_resolution: Mapping[str, Any],
     compliance_result: Optional[Mapping[str, Any]] = None,
+    anomaly_result: Optional[Mapping[str, Any]] = None,
 ) -> list[Finding]:
     """Merge all source findings into a deterministic final list."""
     source_findings: list[Finding] = []
@@ -38,6 +39,14 @@ def merge_deduplicate_sort_findings(
             _coerce_finding_list(
                 compliance_result.get("findings", []),
                 fallback_prefix="CMP",
+                context=context,
+            )
+        )
+    if anomaly_result is not None:
+        source_findings.extend(
+            _coerce_finding_list(
+                anomaly_result.get("findings", []),
+                fallback_prefix="ANM",
                 context=context,
             )
         )

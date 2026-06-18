@@ -2,6 +2,7 @@
 
 from pathlib import Path
 
+from agents.anomaly_agent import run_anomaly_review
 from agents.compliance_agent import run_compliance_review
 from agents.counterparty import run_counterparty_check
 from agents.extraction import run_extraction
@@ -129,6 +130,20 @@ def compliance_node(state: PipelineState) -> PipelineState:
     )
     return {
         "compliance_result": result["compliance_result"],
+        "artifact_paths": result["artifact_paths"],
+    }
+
+
+def anomaly_node(state: PipelineState) -> PipelineState:
+    """Run anomaly review."""
+    result = run_anomaly_review(
+        context=require_state_mapping(state, "context_packet"),
+        extracted_contract=require_state_mapping(state, "extracted_contract"),
+        run_dir=require_state_str(state, "run_dir"),
+        evidence_index=require_state_mapping(state, "evidence_index"),
+    )
+    return {
+        "anomaly_result": result["anomaly_result"],
         "artifact_paths": result["artifact_paths"],
     }
 

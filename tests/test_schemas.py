@@ -11,6 +11,7 @@ import pytest
 from pydantic import ValidationError
 
 from schemas.common import EvidencePointer, Severity
+from schemas.anomaly_result import AnomalyResult
 from schemas.context_packet import ContextPacket
 from schemas.exception_triage import ExceptionCategory, ExceptionTriageItem
 from schemas.extracted_clause import (
@@ -320,6 +321,18 @@ class TestRiskResult:
         assert rr.overall_severity == Severity.HIGH
         assert rr.requires_human_review is True
         assert len(rr.findings) == 1
+
+
+class TestAnomalyResult:
+    def test_valid_anomaly_result(self):
+        result = AnomalyResult(
+            run_id="20250101_120000_abc12345",
+            findings=[Finding(**_valid_finding(category="contract_anomaly"))],
+            checked_rules=["conflicting_governing_law"],
+            requires_legal_review=True,
+        )
+        assert result.run_id == "20250101_120000_abc12345"
+        assert result.findings[0].category == "contract_anomaly"
 
 
 # ---------------------------------------------------------------------------

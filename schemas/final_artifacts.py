@@ -144,6 +144,9 @@ class PipelineMetrics(BaseModel):
     compliance_finding_count: int = Field(
         ..., ge=0, description="Number of findings from compliance review."
     )
+    anomaly_finding_count: int = Field(
+        ..., ge=0, description="Number of findings from anomaly review."
+    )
     counterparty_exception_count: int = Field(
         ..., ge=0, description="Number of counterparty matching exceptions."
     )
