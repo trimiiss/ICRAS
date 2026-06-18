@@ -1,4 +1,4 @@
-"""Tests for the Extraction Agent (US-07)."""
+"""Tests for clause extraction."""
 
 import json
 import shutil
@@ -7,8 +7,8 @@ from pathlib import Path
 import pymupdf
 import pytest
 
-from agents.extraction_agent import ExtractionAgentError, run_extraction
-from agents.intake_agent import run_intake
+from agents.extraction import ExtractionAgentError, run_extraction
+from agents.intake import run_intake
 from utils.bundle_loader import load_bundle
 from utils.evidence_indexer import build_evidence_index
 from utils.run_manager import create_run_folder

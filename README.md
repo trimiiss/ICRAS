@@ -1,245 +1,173 @@
-# ICRAS — Intelligent Contract Review and Approval System
+# ICRAS - Intelligent Contract Review and Approval System
 
-ICRAS is a multi-agent AI pipeline that automates the review, risk assessment, and approval of legal contracts. It ingests a **contract bundle** (PDF contract + supporting policy files), runs it through a chain of specialized agents, and produces a structured **approval packet** with findings, risk scores, and recommendations.
+ICRAS is a deterministic contract review pipeline for intake, clause extraction, validation, counterparty matching, risk assessment, obligation tracking, approval routing, audit logging, and CLM-ready payload generation.
 
-> **Sprint 2 Status:** Agent H now orchestrates the deterministic pipeline with LangGraph. LLM-backed reasoning can be added in later stories without changing the file-based artifact contract.
+The system processes a contract bundle, writes every intermediate artifact to a run folder, and produces evidence-backed approval outputs that can be reviewed by legal, finance, compliance, procurement, or downstream workflow systems.
 
----
+## What The Pipeline Does
 
-## Folder Structure
+ICRAS runs these functional components in order:
 
-```
-icras/
-├── main.py                  # CLI entry point
-├── agents/                  # Deterministic pipeline agents
-│   ├── intake_agent.py
-│   ├── extraction_agent.py
-│   ├── counterparty_agent.py
-│   ├── validation_agent.py
-│   ├── risk_agent.py
-│   └── orchestrator_agent.py
-├── schemas/                 # Pydantic v2 data models
-│   ├── common.py
-│   ├── context_packet.py
-│   ├── extracted_clause.py
-│   ├── finding.py
-│   ├── risk_result.py
-│   └── approval_packet.py
-├── policies/                # Policy templates (future)
+1. **Intake** validates the contract bundle, classifies files, and builds the shared context packet.
+2. **Evidence Indexing** maps contract text to page-level evidence records.
+3. **Clause Extraction** extracts structured clauses, evidence spans, and confidence scores from clean PDFs.
+4. **Counterparty Matching** resolves contract party names against vendor master data.
+5. **Validation** checks required fields, normalizes values, and detects inconsistencies.
+6. **Risk Assessment** scores clauses against playbooks, approval policies, and jurisdiction rules.
+7. **Obligation Tracking** produces a structured register of payments, notices, renewals, compliance duties, and other obligations.
+8. **Workflow Orchestration** coordinates execution, merges findings, routes exceptions, writes final artifacts, and generates a CLM-ready posting payload.
+
+## Repository Layout
+
+```text
+.
+├── main.py                         # CLI entry point
+├── agents/
+│   ├── intake/                     # Bundle validation and context creation
+│   ├── extraction/                 # PDF text extraction and clause modeling
+│   ├── counterparty/               # Party name resolution and vendor matching
+│   ├── validation/                 # Required-field and consistency checks
+│   ├── risk/                       # Clause and policy risk scoring
+│   ├── obligation/                 # Obligation register generation
+│   └── orchestrator/               # LangGraph workflow and final artifacts
+├── schemas/                        # Pydantic v2 artifact schemas
+├── utils/                          # Shared artifact, text, date, policy, and run helpers
 ├── data/
-│   ├── bundles/             # Sample contract bundles
-│   │   ├── clean_nda/
-│   │   └── services_agreement/
-│   ├── vendor_master.csv
-│   └── playbooks/
-├── runs/                    # Generated run folders (gitignored)
-├── tests/                   # Pytest test suite
-├── utils/
-│   ├── bundle_loader.py     # Bundle validation and loading
-│   └── run_manager.py       # Deterministic run folder creation
-├── .env.example
-├── .gitignore
-├── AGENTS.md
-├── README.md
-└── requirements.txt
+│   ├── bundles/                    # Demo and regression contract bundles
+│   ├── extraction_fallbacks/       # Deterministic fallback extraction data
+│   └── playbooks/                  # Shared playbook examples
+├── policies/                       # Policy documentation and examples
+├── tests/                          # Pytest regression suite
+├── runs/                           # Generated run folders
+├── requirements.txt
+├── pyproject.toml
+└── README.md
 ```
 
----
+## Setup
 
-## Setup (Windows PowerShell)
+Create and activate a virtual environment:
 
-### 1. Clone and enter the project
-
-```powershell
-cd C:\Users\Admin\Desktop\ICRAS
+```bash
+python -m venv .venv
+source .venv/bin/activate
 ```
 
-### 2. Create and activate a virtual environment
+On Windows PowerShell:
 
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 ```
 
-### 3. Install dependencies
+Install dependencies:
 
-```powershell
+```bash
 pip install -r requirements.txt
 ```
 
-### 4. Copy environment template
+Copy the environment template if you want optional tracing:
 
-```powershell
-Copy-Item .env.example .env
+```bash
+cp .env.example .env
 ```
 
-Edit `.env` and fill in your API keys when needed. LangGraph runs locally
-without an API key; LangSmith tracing uses `LANGSMITH_API_KEY` when enabled.
+LangGraph execution is local. LangSmith tracing is optional and only runs when enabled in `.env`.
 
----
+## Running ICRAS
 
-## Running the Pipeline
+Run the full pipeline from the repository root:
 
-### One-command demo
-
-Run this from the repository root:
-
-```powershell
-python main.py --bundle data/bundles/net90_services_agreement
-```
-
-The command prints the selected bundle, every agent step with pass/fail status,
-the final decision, the approval route, and generated artifact paths.
-
-### Presenter demo flow
-
-```powershell
+```bash
 python main.py --bundle data/bundles/clean_nda
 ```
 
-Expected result: `Final Decision: AUTO-APPROVE`.
+Useful demo bundles:
 
-```powershell
+```bash
+python main.py --bundle data/bundles/clean_nda
 python main.py --bundle data/bundles/missing_liability_cap
-```
-
-Expected result: `Final Decision: ESCALATE` with `Legal review`.
-
-```powershell
 python main.py --bundle data/bundles/net90_payment
-```
-
-Expected result: `Final Decision: ESCALATE` with `Finance approval`.
-
-### Live policy-change demo
-
-The live policy demo uses `data/bundles/net60_policy_demo`, which contains
-net-60 payment terms while the default policy allows only net-30.
-
-```powershell
 python main.py --bundle data/bundles/net60_policy_demo
 ```
 
-Expected result before editing policy: `Finance approval`.
+The CLI prints the selected bundle, step status, final decision, approval route, and generated artifact paths.
 
-Edit `data/bundles/net60_policy_demo/approval_policy.yaml` and change:
+## Run Artifacts
 
-```yaml
-approved_payment_terms:
-  terms:
-  - net-30
+Each execution creates a folder under `runs/<run_id>/` with deterministic artifacts:
+
+```text
+metadata.json
+config.json
+audit_log.jsonl
+audit_log.md
+context_packet.json
+document_inventory.json
+evidence_index.json
+extracted_contract.json
+validation_findings.json
+counterparty_resolution.json
+clause_analysis.json
+obligations.csv
+final_findings.json
+exceptions.md
+approval_packet.json
+posting_payload.json
+metrics.json
 ```
 
-to:
+Important outputs:
 
-```yaml
-approved_payment_terms:
-  terms:
-  - net-60
-```
+- `approval_packet.json` contains the final decision, approval route, grouped exceptions, and evidence-backed reasons.
+- `exceptions.md` is the human-readable exception summary.
+- `posting_payload.json` is a vendor-neutral CLM payload grouped into contract, counterparty, decision, risk, approval, and artifact sections.
+- `audit_log.md` and `audit_log.jsonl` provide traceable execution history.
+- `obligations.csv` provides a tabular obligation register for follow-up workflows.
 
-Then re-run:
+## Policy Configuration
 
-```powershell
-python main.py --bundle data/bundles/net60_policy_demo
-```
+Bundle-level policy lives in YAML files such as:
 
-Expected result after editing policy: `Final Decision: AUTO-APPROVE`.
+- `approval_policy.yaml`
+- `playbook.yaml`
+- `jurisdiction_rules.yaml`
 
-Each run creates a unique folder under `runs/` with this structure:
+Policy changes do not require Python code edits. For example, changing approved payment terms in a bundle from `net-30` to `net-60` changes the next run's approval decision when the contract terms match the updated policy.
 
-```
-runs/<run_id>/
-├── metadata.json
-├── config.json
-├── audit_log.jsonl
-├── audit_log.md
-├── context_packet.json
-├── document_inventory.json
-├── evidence_index.json
-├── extracted_contract.json
-├── validation_findings.json
-├── counterparty_resolution.json
-├── clause_analysis.json
-├── obligations.csv
-├── final_findings.json
-├── exceptions.md
-├── approval_packet.json
-├── posting_payload.json
-└── metrics.json
-```
+## Testing
 
-Running the same bundle multiple times produces separate run folders.
+Run the full regression suite:
 
-`approval_packet.json` includes grouped approval routes plus per-exception
-triage items with category, approver, reason, next action, and evidence links.
-The route table is configured in each bundle's `approval_policy.yaml` under
-`exception_routing`, so approver routing can change without Python code edits.
-
-`posting_payload.json` is a vendor-neutral CLM integration payload. It is
-validated by Pydantic and grouped into `contract`, `counterparty`, `decision`,
-`risk`, `approval`, and structured `artifacts` sections so a mock CLM adapter
-can consume it without parsing the internal run artifacts first.
-
----
-
-## Running Tests
-
-```powershell
+```bash
 pytest -q
 ```
 
-Or with verbose output:
+Run Ruff:
 
-```powershell
-pytest -v
+```bash
+ruff check agents tests utils schemas
 ```
 
----
+The test suite covers bundle loading, run management, extraction, validation, counterparty matching, risk assessment, obligation generation, orchestration, policy-driven decisions, and end-to-end smoke scenarios.
 
-## Configurable Policy Rules
+## Development Notes
 
-Contract policy thresholds live in each bundle's `approval_policy.yaml`.
-For example, change:
-
-```yaml
-approved_payment_terms:
-  terms:
-    - net-30
-```
-
-to:
-
-```yaml
-approved_payment_terms:
-  terms:
-    - net-60
-```
-
-The next bundle load uses the edited YAML without Python code changes. The test
-`tests/test_policy_rules.py::test_full_pipeline_policy_edit_changes_demo_decision`
-demonstrates the visible full-pipeline decision change: a net-60 payment clause
-routes to Finance under net-30 policy and auto-approves after the YAML is
-changed to net-60.
-
----
-
-## Key Concepts
-
-| Concept | Description |
-|---------|-------------|
-| **Bundle** | A folder containing a contract PDF and supporting YAML/CSV policy files |
-| **Run** | A single pipeline execution, identified by a unique `run_id` |
-| **Schema** | A Pydantic v2 model that validates structured data between agents |
-| **Agent** | A specialized module that performs one step of the review pipeline |
+- Agent packages expose public APIs through their package `__init__.py` files.
+- New code should import from package names such as `agents.validation`, `agents.risk`, and `agents.orchestrator`.
+- Shared cross-agent logic belongs in `utils/`.
+- Artifact contracts belong in `schemas/`.
+- Run artifacts should remain deterministic and evidence-backed.
+- Policy behavior should stay data-driven through YAML wherever possible.
 
 ## Optional LangSmith Tracing
 
-LangGraph runs locally without an API key. To send pipeline traces to LangSmith,
-copy `.env.example` to `.env` and set:
+To enable LangSmith tracing, set:
 
-```powershell
+```bash
 LANGSMITH_TRACING=true
 LANGSMITH_API_KEY=your_langsmith_key
-LANGSMITH_PROJECT=icras-agent-h
+LANGSMITH_PROJECT=icras
 ```
+
+Leave `LANGSMITH_TRACING=false` for local deterministic runs without external tracing.

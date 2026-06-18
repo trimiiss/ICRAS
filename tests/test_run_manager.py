@@ -1,4 +1,4 @@
-"""Tests for the run manager (US-02).
+"""Tests for the run manager.
 
 Covers:
     - A run folder contains metadata.json, config.json, and audit_log.jsonl.

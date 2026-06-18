@@ -110,7 +110,7 @@ class ExceptionRouteRule(BaseModel):
 
 
 class ExceptionRouting(BaseModel):
-    """Configurable exception-routing table for Agent H."""
+    """Configurable exception-routing table for workflow orchestration."""
 
     auto_approve: Optional[AutoApproveRouting] = Field(
         default=None,
@@ -239,7 +239,7 @@ class PolicyRules(BaseModel):
     )
     exception_routing: ExceptionRouting = Field(
         default_factory=ExceptionRouting,
-        description="Agent H exception triage and approval routing table.",
+        description="Exception triage and approval routing table.",
     )
     approved_payment_terms: ApprovedPaymentTerms = Field(
         default_factory=ApprovedPaymentTerms,

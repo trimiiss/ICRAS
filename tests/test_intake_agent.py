@@ -1,4 +1,4 @@
-"""Tests for the Intake Agent (US-05)."""
+"""Tests for intake."""
 
 import json
 import shutil
@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from agents.intake_agent import IntakeAgentError, run_intake
+from agents.intake import IntakeAgentError, run_intake
 from utils.bundle_loader import load_bundle
 from utils.run_manager import create_run_folder
 

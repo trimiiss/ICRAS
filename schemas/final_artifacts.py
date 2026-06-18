@@ -1,4 +1,4 @@
-"""Final Agent H artifact schemas."""
+"""Final workflow artifact schemas."""
 
 from datetime import datetime, timezone
 from typing import Dict, List, Optional
@@ -10,7 +10,7 @@ from schemas.finding import Finding
 
 
 class FinalFindingsResult(BaseModel):
-    """Merged, deduplicated, severity-sorted finding output from Agent H."""
+    """Merged, deduplicated, severity-sorted finding output."""
 
     run_id: str = Field(..., description="Unique identifier for this pipeline run.")
     overall_severity: Severity = Field(
@@ -26,7 +26,7 @@ class FinalFindingsResult(BaseModel):
     )
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc),
-        description="Timestamp when Agent H finalized findings.",
+        description="Timestamp when workflow orchestration finalized findings.",
     )
 
 
@@ -120,7 +120,7 @@ class AgentAuditTrace(BaseModel):
 
 
 class PipelineMetrics(BaseModel):
-    """Run-level metrics written by Agent H."""
+    """Run-level metrics written by workflow orchestration."""
 
     run_id: str = Field(..., description="Unique identifier for this pipeline run.")
     status: str = Field(..., description="Final pipeline status.")
@@ -136,13 +136,13 @@ class PipelineMetrics(BaseModel):
         ..., ge=0, description="Number of extracted clauses."
     )
     validation_finding_count: int = Field(
-        ..., ge=0, description="Number of findings from Agent D."
+        ..., ge=0, description="Number of findings from validation."
     )
     risk_finding_count: int = Field(
-        ..., ge=0, description="Number of findings from Agent E."
+        ..., ge=0, description="Number of findings from risk assessment."
     )
     counterparty_exception_count: int = Field(
-        ..., ge=0, description="Number of counterparty exceptions from Agent C."
+        ..., ge=0, description="Number of counterparty matching exceptions."
     )
     final_finding_count: int = Field(
         ..., ge=0, description="Number of final merged findings."

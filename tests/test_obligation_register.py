@@ -1,10 +1,10 @@
-"""Tests for Agent H obligation register generation."""
+"""Tests for obligation register generation."""
 
 import csv
 import json
 from pathlib import Path
 
-from agents.orchestrator_agent import (
+from agents.obligation import (
     OBLIGATION_CSV_COLUMNS,
     run_obligation_register,
 )
@@ -68,7 +68,7 @@ def _read_rows(csv_path: Path) -> list[dict[str, str]]:
 
 
 def test_obligations_csv_uses_consistent_columns(tmp_path: Path) -> None:
-    """CSV output should use the exact Agent H column contract."""
+    """CSV output should use the exact obligation register column contract."""
     run_dir = _run_dir(tmp_path)
 
     result = run_obligation_register(
@@ -196,7 +196,7 @@ def test_recurring_obligations_are_marked(tmp_path: Path) -> None:
 
 
 def test_header_only_csv_is_generated_when_no_obligations(tmp_path: Path) -> None:
-    """Agent H should still write a header-only CSV with no obligation rows."""
+    """Obligation tracking should still write a header-only CSV with no rows."""
     run_dir = _run_dir(tmp_path)
 
     result = run_obligation_register(

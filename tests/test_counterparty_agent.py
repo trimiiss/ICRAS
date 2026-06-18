@@ -1,4 +1,4 @@
-"""Tests for Agent C — Counterparty Resolution Agent."""
+"""Tests for counterparty matching."""
 
 import csv
 import json
@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from agents.counterparty_agent import (
+from agents.counterparty import (
     CounterpartyAgentError,
     normalize_name,
     run_counterparty_check,

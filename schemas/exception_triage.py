@@ -1,4 +1,4 @@
-"""Exception triage schemas produced by Agent H."""
+"""Exception triage schemas produced by approval routing."""
 
 from enum import Enum
 from typing import List, Optional
@@ -23,7 +23,7 @@ class ExceptionTriageItem(BaseModel):
 
     finding_id: str = Field(..., description="Finding that triggered this exception.")
     category: ExceptionCategory = Field(
-        ..., description="Approval-routing category selected by Agent H."
+        ..., description="Approval-routing category selected by workflow orchestration."
     )
     approver: Optional[str] = Field(
         default=None,

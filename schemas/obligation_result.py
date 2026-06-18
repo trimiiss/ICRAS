@@ -1,4 +1,4 @@
-"""Obligation register schemas produced by Agent H."""
+"""Obligation register schemas produced by obligation tracking."""
 
 from datetime import datetime, timezone
 from typing import List, Optional
@@ -58,7 +58,7 @@ class ObligationRecord(BaseModel):
 
 
 class ObligationRegisterResult(BaseModel):
-    """Agent H obligation-register artifact."""
+    """Obligation-register artifact."""
 
     run_id: str = Field(..., description="Unique identifier for this pipeline run.")
     obligations: List[ObligationRecord] = Field(

@@ -20,7 +20,7 @@ class ApprovalStatus(str, Enum):
 
 
 class ApprovalRoute(BaseModel):
-    """One approval route selected by Agent H."""
+    """One approval route selected by workflow orchestration."""
 
     category: str = Field(
         ..., description="Routing category, such as LEGAL, FINANCE, or COMPLIANCE."
@@ -63,7 +63,7 @@ class ApprovalPacket(BaseModel):
     )
     approval_route: List[ApprovalRoute] = Field(
         default_factory=list,
-        description="Approver routing selected by Agent H.",
+        description="Approver routing selected by workflow orchestration.",
     )
     exceptions: List[ExceptionTriageItem] = Field(
         default_factory=list,
@@ -79,7 +79,7 @@ class ApprovalPacket(BaseModel):
     )
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc),
-        description="Timestamp when Agent H created the approval packet.",
+        description="Timestamp when workflow orchestration created the approval packet.",
     )
     reviewed_at: Optional[datetime] = Field(
         default=None,

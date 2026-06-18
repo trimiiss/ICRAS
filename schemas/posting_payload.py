@@ -1,4 +1,4 @@
-"""CLM-ready posting payload schema produced by Agent H."""
+"""CLM-ready posting payload schema produced by workflow orchestration."""
 
 from datetime import datetime, timezone
 from typing import Dict, List, Literal, Optional

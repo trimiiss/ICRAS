@@ -1,4 +1,4 @@
-"""CounterpartyResult schema — counterparty resolution output for Agent C.
+"""Counterparty result schemas for counterparty matching.
 
 Each match result records the original extracted party name, the normalized
 form, the closest vendor master match (if any), similarity score, and risk
@@ -64,7 +64,7 @@ class CounterpartyMatch(BaseModel):
 
 
 class CounterpartyResolution(BaseModel):
-    """Structured output produced by Agent C — Counterparty Resolution Agent."""
+    """Structured output produced by counterparty matching."""
 
     run_id: str = Field(..., description="Unique identifier for this pipeline run.")
     matches: List[CounterpartyMatch] = Field(

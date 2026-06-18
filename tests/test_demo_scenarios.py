@@ -6,7 +6,7 @@ from typing import Any, Mapping
 
 import pytest
 
-from agents.orchestrator_agent import run_pipeline
+from agents.orchestrator import run_pipeline
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent

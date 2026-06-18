@@ -1,4 +1,4 @@
-"""Tests for page-level evidence indexing (US-06)."""
+"""Tests for page-level evidence indexing."""
 
 import json
 import shutil
@@ -7,7 +7,7 @@ from pathlib import Path
 import pymupdf
 import pytest
 
-from agents.intake_agent import run_intake
+from agents.intake import run_intake
 from utils.bundle_loader import load_bundle
 from utils.evidence_indexer import EvidenceIndexError, build_evidence_index
 from utils.run_manager import create_run_folder
