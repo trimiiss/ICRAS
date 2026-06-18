@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from agents.validation_agent import ValidationAgentError, run_validation
+from agents.validation import ValidationAgentError, run_validation
 
 
 def _run_dir(tmp_path: Path, run_id: str = "test-run") -> Path:

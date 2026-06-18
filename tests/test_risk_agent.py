@@ -1,9 +1,9 @@
-"""Tests for Agent E clause risk scoring."""
+"""Tests for risk assessment."""
 
 import json
 from pathlib import Path
 
-from agents.risk_agent import run_risk_assessment
+from agents.risk import run_risk_assessment
 
 
 def _run_dir(tmp_path: Path, run_id: str = "risk-run") -> Path:
@@ -109,7 +109,7 @@ def _validation_finding(
     severity: str = "HIGH",
     title: str = "Validation finding",
 ) -> dict:
-    """Return a validation finding ready for Agent E."""
+    """Return a validation finding ready for risk assessment."""
     evidence = _evidence(4, title)
     return {
         "finding_id": "VAL-001",
@@ -313,7 +313,7 @@ def test_playbook_tolerance_thresholds_classify_material_variance(
 
 
 def test_reads_run_artifacts_and_generates_clause_analysis(tmp_path: Path) -> None:
-    """Agent E can read prior artifacts directly from the run directory."""
+    """Risk assessment can read prior artifacts directly from the run directory."""
     run_dir = _run_dir(tmp_path)
     (run_dir / "context_packet.json").write_text(
         json.dumps(_context()),
@@ -347,7 +347,7 @@ def test_reads_run_artifacts_and_generates_clause_analysis(tmp_path: Path) -> No
 
 
 def test_payment_terms_standard_uses_approval_policy(tmp_path: Path) -> None:
-    """Agent E should honor edited approved payment terms from policy."""
+    """Risk assessment should honor edited approved payment terms from policy."""
     run_dir = _run_dir(tmp_path)
     context = _context()
     context["approval_policy"]["approved_payment_terms"]["terms"] = ["net-60"]

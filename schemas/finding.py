@@ -45,7 +45,7 @@ class Finding(BaseModel):
     )
     message: Optional[str] = Field(
         default=None,
-        description="Agent-facing finding message for downstream consumers.",
+        description="Component-facing finding message for downstream consumers.",
     )
     source_clause_text: Optional[str] = Field(
         default=None,
@@ -57,7 +57,7 @@ class Finding(BaseModel):
     )
     evidence_pointer: Optional[EvidencePointer] = Field(
         default=None,
-        description="Primary evidence pointer for Agent E risk scoring.",
+        description="Primary evidence pointer for risk assessment.",
     )
     manual_review_required: bool = Field(
         default=False,

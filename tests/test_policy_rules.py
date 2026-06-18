@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from agents.orchestrator_agent import run_pipeline
-from agents.validation_agent import run_validation
+from agents.orchestrator import run_pipeline
+from agents.validation import run_validation
 from utils.bundle_loader import load_bundle
 
 

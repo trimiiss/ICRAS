@@ -1,13 +1,14 @@
 """Evidence indexing utilities for source-backed contract review."""
 
-import json
 from pathlib import Path
 from typing import Any, Dict, Mapping
 
 import pymupdf
 
 from schemas.evidence_index import EvidenceIndex, EvidenceRecord, EvidenceWarning
+from utils.artifacts import validate_run_dir, write_model_json
 from utils.run_manager import append_audit_event
+from utils.text import truncate
 
 
 class EvidenceIndexError(Exception):
@@ -34,7 +35,11 @@ def build_evidence_index(
     Raises:
         EvidenceIndexError: If the primary contract cannot be indexed.
     """
-    run_path = _validate_run_dir(run_dir)
+    run_path = validate_run_dir(
+        run_dir,
+        error_type=EvidenceIndexError,
+        before_action="indexing evidence",
+    )
     primary_document = _get_primary_document(document_inventory)
     contract_path = Path(_require_str(bundle_data, "contract_path")).resolve()
 
@@ -59,7 +64,7 @@ def build_evidence_index(
     )
 
     output_path = run_path / "evidence_index.json"
-    _write_model_json(output_path, evidence_index)
+    write_model_json(output_path, evidence_index)
 
     append_audit_event(
         run_path,
@@ -79,19 +84,6 @@ def build_evidence_index(
             "evidence_index": str(output_path),
         },
     }
-
-
-def _validate_run_dir(run_dir: str | Path) -> Path:
-    """Return a valid run directory path or raise a clear evidence error."""
-    run_path = Path(run_dir).resolve()
-    if not run_path.exists():
-        raise EvidenceIndexError(
-            f"Run directory does not exist: {run_path}. "
-            "Create it with create_run_folder before indexing evidence."
-        )
-    if not run_path.is_dir():
-        raise EvidenceIndexError(f"Run path is not a directory: {run_path}")
-    return run_path
 
 
 def _require_str(data: Mapping[str, Any], key: str) -> str:
@@ -199,13 +191,4 @@ def _normalize_text(text: str) -> str:
 
 def _make_excerpt(text: str, max_chars: int = 500) -> str:
     """Return a compact evidence snippet from page text."""
-    if len(text) <= max_chars:
-        return text
-    return text[: max_chars - 3].rstrip() + "..."
-
-
-def _write_model_json(path: Path, model: EvidenceIndex) -> None:
-    """Write an EvidenceIndex model as deterministic, formatted JSON."""
-    with open(path, "w", encoding="utf-8") as file:
-        json.dump(model.model_dump(mode="json"), file, indent=2, ensure_ascii=False)
-        file.write("\n")
+    return truncate(text, max_chars=max_chars)

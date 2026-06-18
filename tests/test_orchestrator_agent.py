@@ -1,10 +1,10 @@
-"""Tests for Agent H LangGraph orchestration."""
+"""Tests for workflow orchestration."""
 
 import json
 import re
 from pathlib import Path
 
-from agents.orchestrator_agent import (
+from agents.orchestrator import (
     _build_approval_routes,
     _compare_determinism_payloads,
     _merge_deduplicate_sort_findings,
@@ -109,7 +109,7 @@ def test_agent_h_deduplicates_and_sorts_findings_by_severity() -> None:
 
 
 def test_agent_h_routes_ticket_exception_categories_from_policy() -> None:
-    """Each US-17 routing-table case should map through approval_policy.yaml."""
+    """Each routing-table case should map through approval_policy.yaml."""
     context = {
         "approval_policy": load_bundle(NDA_BUNDLE)["approval_policy"],
         "contract_file": "contract.pdf",
@@ -225,7 +225,7 @@ def test_agent_h_auto_approves_standard_terms_from_policy() -> None:
 
 
 def test_run_pipeline_executes_agent_h_graph(tmp_path: Path, monkeypatch) -> None:
-    """The LangGraph pipeline should run all required Agent H steps."""
+    """The LangGraph pipeline should run all required workflow steps."""
     monkeypatch.chdir(tmp_path)
 
     result = run_pipeline(str(LOW_CONFIDENCE_BUNDLE))

@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
-from agents.orchestrator_agent import OrchestratorAgentError, run_pipeline
+from agents.orchestrator import OrchestratorAgentError, run_pipeline
 
 
 SUCCESS_MARK = "\u2705"
@@ -18,7 +18,7 @@ FAIL_MARK = "\u274c"
 
 
 def main() -> int:
-    """Parse CLI arguments and run the Agent H LangGraph pipeline."""
+    """Parse CLI arguments and run the workflow orchestrator."""
     _configure_console_encoding()
     parser = argparse.ArgumentParser(
         prog="icras",

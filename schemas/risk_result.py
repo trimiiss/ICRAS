@@ -1,4 +1,4 @@
-"""Risk result schemas produced by Agent E."""
+"""Risk result schemas produced by risk assessment."""
 
 from datetime import datetime, timezone
 from typing import List, Optional
@@ -10,7 +10,7 @@ from schemas.finding import Finding
 
 
 class ClauseRisk(BaseModel):
-    """Clause-level risk scored by Agent E."""
+    """Clause-level risk scored by risk assessment."""
 
     risk_id: str = Field(..., description="Unique identifier for this clause risk.")
     clause_id: Optional[str] = Field(
@@ -48,7 +48,7 @@ class ClauseRisk(BaseModel):
 
 
 class ClauseAnalysisResult(BaseModel):
-    """Agent E clause-analysis artifact."""
+    """Clause-analysis artifact produced by risk assessment."""
 
     run_id: str = Field(..., description="Unique identifier for this pipeline run.")
     overall_severity: Severity = Field(

@@ -1,4 +1,4 @@
-"""Tests for the bundle loader (US-04).
+"""Tests for the bundle loader.
 
 Covers:
     - A valid sample bundle loads successfully.

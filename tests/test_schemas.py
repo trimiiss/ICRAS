@@ -1,4 +1,4 @@
-"""Tests for Pydantic v2 schemas (US-03).
+"""Tests for Pydantic v2 schemas.
 
 Covers:
     - Valid schema data passes validation.

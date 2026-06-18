@@ -1,4 +1,4 @@
-"""Smoke tests for Sprint 1 intake, extraction, and validation flow."""
+"""Smoke tests for intake, extraction, validation, and orchestration flows."""
 
 import json
 import shutil
@@ -8,10 +8,10 @@ from pathlib import Path
 
 import pymupdf
 
-from agents.extraction_agent import run_extraction
-from agents.intake_agent import run_intake
-from agents.risk_agent import run_risk_assessment
-from agents.validation_agent import run_validation
+from agents.extraction import run_extraction
+from agents.intake import run_intake
+from agents.risk import run_risk_assessment
+from agents.validation import run_validation
 from utils.bundle_loader import load_bundle
 from utils.evidence_indexer import build_evidence_index
 from utils.run_manager import create_run_folder
@@ -50,7 +50,7 @@ def _run_main(bundle_path: Path, tmp_path: Path) -> tuple[subprocess.CompletedPr
 
 
 def _assert_expected_files(run_dir: Path) -> None:
-    """Assert the Sprint 1 smoke output files exist."""
+    """Assert the smoke output files exist."""
     for filename in EXPECTED_SMOKE_FILES:
         assert (run_dir / filename).is_file(), f"Missing smoke artifact: {filename}"
 
@@ -70,7 +70,7 @@ def _write_text_pdf(pdf_path: Path, lines: list[str]) -> None:
 
 
 def test_clean_nda_full_flow_creates_smoke_artifacts(tmp_path: Path) -> None:
-    """Clean NDA should run Agent A -> B -> D without errors."""
+    """Clean NDA should run intake, extraction, and validation without errors."""
     result, run_dir = _run_main(NDA_BUNDLE, tmp_path)
 
     assert result.returncode == 0, result.stderr
