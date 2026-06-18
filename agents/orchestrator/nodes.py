@@ -2,6 +2,7 @@
 
 from pathlib import Path
 
+from agents.compliance_agent import run_compliance_review
 from agents.counterparty import run_counterparty_check
 from agents.extraction import run_extraction
 from agents.intake import run_intake
@@ -110,9 +111,24 @@ def validation_node(state: PipelineState) -> PipelineState:
         clauses=list(extracted_contract.get("clauses", [])),
         run_dir=require_state_str(state, "run_dir"),
         evidence_index=require_state_mapping(state, "evidence_index"),
+        extracted_contract=extracted_contract,
     )
     return {
         "validation_result": result["validation_result"],
+        "artifact_paths": result["artifact_paths"],
+    }
+
+
+def compliance_node(state: PipelineState) -> PipelineState:
+    """Run compliance review."""
+    result = run_compliance_review(
+        context=require_state_mapping(state, "context_packet"),
+        extracted_contract=require_state_mapping(state, "extracted_contract"),
+        run_dir=require_state_str(state, "run_dir"),
+        evidence_index=require_state_mapping(state, "evidence_index"),
+    )
+    return {
+        "compliance_result": result["compliance_result"],
         "artifact_paths": result["artifact_paths"],
     }
 

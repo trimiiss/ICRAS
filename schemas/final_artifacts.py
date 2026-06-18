@@ -141,6 +141,9 @@ class PipelineMetrics(BaseModel):
     risk_finding_count: int = Field(
         ..., ge=0, description="Number of findings from risk assessment."
     )
+    compliance_finding_count: int = Field(
+        ..., ge=0, description="Number of findings from compliance review."
+    )
     counterparty_exception_count: int = Field(
         ..., ge=0, description="Number of counterparty matching exceptions."
     )
@@ -162,6 +165,21 @@ class PipelineMetrics(BaseModel):
     )
     fallback_reason: Optional[str] = Field(
         None, description="Reason extraction fallback was used, if applicable."
+    )
+    ocr_used: bool = Field(
+        ..., description="Whether OCR supplied text during extraction."
+    )
+    ocr_pages_processed: int = Field(
+        ..., ge=0, description="Number of pages where OCR was attempted."
+    )
+    ocr_average_confidence: Optional[float] = Field(
+        None,
+        ge=0.0,
+        le=1.0,
+        description="Average OCR confidence across OCR-used pages.",
+    )
+    ocr_manual_review_required: bool = Field(
+        ..., description="Whether OCR quality requires manual review."
     )
     low_confidence_count: int = Field(
         ...,

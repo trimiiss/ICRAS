@@ -13,7 +13,12 @@ from pydantic import ValidationError
 from schemas.common import EvidencePointer, Severity
 from schemas.context_packet import ContextPacket
 from schemas.exception_triage import ExceptionCategory, ExceptionTriageItem
-from schemas.extracted_clause import ExtractedClause, ExtractedContract
+from schemas.extracted_clause import (
+    ExtractedClause,
+    ExtractedContract,
+    OcrMetadata,
+    OcrPageResult,
+)
 from schemas.finding import Finding
 from schemas.policy_rules import PolicyRules
 from schemas.posting_payload import (
@@ -193,6 +198,27 @@ class TestExtractedClause:
         assert extracted.source_file == "contract.pdf"
         assert len(extracted.clauses) == 1
         assert extracted.warnings == []
+        assert extracted.text_extraction_method == "digital"
+
+    def test_valid_ocr_metadata(self):
+        metadata = OcrMetadata(
+            used=True,
+            engine="pymupdf_tesseract",
+            pages_processed=1,
+            average_confidence=0.82,
+            low_confidence=False,
+            manual_review_required=False,
+            pages=[
+                OcrPageResult(
+                    page_number=1,
+                    used=True,
+                    confidence=0.82,
+                    text_length=240,
+                )
+            ],
+        )
+        assert metadata.used is True
+        assert metadata.pages[0].confidence == 0.82
 
 
 # ---------------------------------------------------------------------------

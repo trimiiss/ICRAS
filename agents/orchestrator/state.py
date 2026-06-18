@@ -56,6 +56,7 @@ class PipelineState(TypedDict, total=False):
     counterparty_resolution: dict[str, Any]
     clause_analysis: dict[str, Any]
     risk_result: dict[str, Any]
+    compliance_result: dict[str, Any]
     obligation_register: dict[str, Any]
     final_findings: dict[str, Any]
     approval_packet: dict[str, Any]
@@ -74,6 +75,7 @@ PIPELINE_STEP_ORDER: tuple[str, ...] = (
     "counterparty",
     "validation",
     "risk_scoring",
+    "compliance",
     "obligation_register",
     "agent_h_finalize",
 )
@@ -84,6 +86,7 @@ STEP_INPUT_ARTIFACTS: dict[str, tuple[str, ...]] = {
     "counterparty": ("context_packet", "extracted_contract", "evidence_index"),
     "validation": ("context_packet", "extracted_contract", "evidence_index"),
     "risk_scoring": ("context_packet", "extracted_contract", "validation_findings"),
+    "compliance": ("context_packet", "extracted_contract", "evidence_index"),
     "obligation_register": ("context_packet", "extracted_contract"),
     "agent_h_finalize": (
         "context_packet",
@@ -93,6 +96,7 @@ STEP_INPUT_ARTIFACTS: dict[str, tuple[str, ...]] = {
         "counterparty_resolution",
         "clause_analysis",
         "risk_result",
+        "compliance_findings",
         "obligations",
     ),
 }

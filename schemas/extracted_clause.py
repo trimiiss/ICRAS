@@ -1,7 +1,7 @@
 """Schemas for extracted contract clauses and extraction outputs."""
 
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -117,6 +117,58 @@ class ExtractionWarning(BaseModel):
     message: str = Field(..., description="Human-readable warning message.")
 
 
+class OcrPageResult(BaseModel):
+    """OCR status and quality metadata for one source page."""
+
+    page_number: int = Field(..., ge=1, description="1-indexed source page number.")
+    used: bool = Field(..., description="Whether OCR text was used for this page.")
+    confidence: Optional[ConfidenceScore] = Field(
+        default=None,
+        description="Deterministic OCR quality score for this page, when available.",
+    )
+    text_length: int = Field(
+        default=0,
+        ge=0,
+        description="Number of normalized OCR characters extracted from the page.",
+    )
+    warning: Optional[str] = Field(
+        default=None,
+        description="Non-blocking OCR warning for this page, if OCR failed or was low quality.",
+    )
+
+
+class OcrMetadata(BaseModel):
+    """Run-level OCR usage and confidence metadata for clause extraction."""
+
+    used: bool = Field(..., description="Whether OCR supplied text for any page.")
+    engine: str = Field(..., description="OCR engine used by the extraction agent.")
+    pages_processed: int = Field(
+        default=0,
+        ge=0,
+        description="Number of pages where OCR was attempted.",
+    )
+    average_confidence: Optional[ConfidenceScore] = Field(
+        default=None,
+        description="Average deterministic OCR confidence across OCR-used pages.",
+    )
+    low_confidence: bool = Field(
+        default=False,
+        description="Whether any OCR-used page is below the confidence threshold.",
+    )
+    manual_review_required: bool = Field(
+        default=False,
+        description="Whether OCR quality requires manual source review.",
+    )
+    reason: Optional[str] = Field(
+        default=None,
+        description="Why OCR was attempted or why OCR metadata was recorded.",
+    )
+    pages: list[OcrPageResult] = Field(
+        default_factory=list,
+        description="Page-level OCR status and confidence details.",
+    )
+
+
 class ExtractedContract(BaseModel):
     """Structured clause extraction output for one contract run."""
 
@@ -130,6 +182,14 @@ class ExtractedContract(BaseModel):
     fallback_reason: Optional[str] = Field(
         default=None,
         description="Reason synthetic fallback data was used, if applicable.",
+    )
+    text_extraction_method: Literal["digital", "ocr", "none"] = Field(
+        default="digital",
+        description="Primary text extraction method used for this contract.",
+    )
+    ocr_metadata: Optional[OcrMetadata] = Field(
+        default=None,
+        description="OCR usage and confidence metadata, when OCR was attempted.",
     )
     clauses: list[ExtractedClause] = Field(
         default_factory=list,

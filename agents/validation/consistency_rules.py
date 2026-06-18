@@ -2,7 +2,7 @@
 
 from typing import Any, Mapping, Sequence
 
-from schemas.common import Severity
+from schemas.common import EvidencePointer, Severity
 from schemas.extracted_clause import ExtractedClause
 from schemas.finding import Finding
 from agents.validation.analysis_helpers import (
@@ -200,6 +200,92 @@ def _validate_low_confidence_signatures(
         )
 
 
+def _validate_low_ocr_confidence(
+    context: Mapping[str, Any],
+    extracted_contract: Mapping[str, Any] | None,
+    evidence_records: Sequence[Mapping[str, Any]],
+    findings: list[Finding],
+) -> None:
+    """Flag OCR output below the manual-review confidence threshold."""
+    if not isinstance(extracted_contract, Mapping):
+        return
+    metadata = extracted_contract.get("ocr_metadata")
+    if not isinstance(metadata, Mapping) or not bool(metadata.get("used")):
+        return
+
+    threshold = _manual_review_confidence_threshold(context)
+    pages = metadata.get("pages")
+    low_pages: list[Mapping[str, Any]] = []
+    if isinstance(pages, list):
+        for page in pages:
+            if not isinstance(page, Mapping) or not bool(page.get("used")):
+                continue
+            confidence = _confidence_value(page.get("confidence"))
+            if confidence is not None and confidence < threshold:
+                low_pages.append(page)
+
+    average_confidence = _confidence_value(metadata.get("average_confidence"))
+    has_low_average = (
+        average_confidence is not None and average_confidence < threshold
+    )
+    if not low_pages and not has_low_average and not bool(metadata.get("low_confidence")):
+        return
+
+    confidence = (
+        min(
+            _confidence_value(page.get("confidence")) or 0.0
+            for page in low_pages
+        )
+        if low_pages
+        else average_confidence or 0.0
+    )
+    page_numbers = [
+        int(page["page_number"])
+        for page in low_pages
+        if isinstance(page.get("page_number"), int)
+    ]
+    page_text = (
+        "pages " + ", ".join(str(page) for page in page_numbers)
+        if page_numbers
+        else "one or more pages"
+    )
+    excerpt = (
+        f"OCR confidence for {page_text} is below the manual-review threshold "
+        f"({confidence:.2f} < {threshold:.2f})."
+    )
+    fallback = _fallback_evidence(context, evidence_records)
+    evidence = [
+        EvidencePointer(
+            evidence_id=fallback.evidence_id,
+            document_id=fallback.document_id,
+            source_file=fallback.source_file,
+            page_number=page_numbers[0] if page_numbers else fallback.page_number,
+            clause_reference=fallback.clause_reference,
+            excerpt=excerpt,
+        )
+    ]
+    findings.append(
+        Finding(
+            finding_id=f"VAL-{len(findings) + 1:03d}",
+            category="contract_validation",
+            title="Low OCR confidence",
+            description=excerpt,
+            severity=Severity.MEDIUM,
+            confidence=confidence,
+            evidence=evidence,
+            recommendation="Manually review OCR text against the source PDF.",
+            field_name="ocr_confidence",
+            issue_type="low_ocr_confidence",
+            message=excerpt,
+            source_clause_text=excerpt,
+            source_page=evidence[0].page_number,
+            evidence_pointer=evidence[0],
+            manual_review_required=True,
+            risk_engine_ready=True,
+        )
+    )
+
+
 def _validate_multi_party_fields(
     context: Mapping[str, Any],
     clauses: Sequence[ExtractedClause],
@@ -257,3 +343,14 @@ def _validate_multi_party_fields(
             manual_review_required=True,
         )
     )
+
+
+def _confidence_value(value: Any) -> float | None:
+    """Return a normalized confidence value when possible."""
+    try:
+        confidence = float(value)
+    except (TypeError, ValueError):
+        return None
+    if confidence < 0.0 or confidence > 1.0:
+        return None
+    return confidence

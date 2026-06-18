@@ -7,14 +7,15 @@ from typing import Any, Mapping, Optional
 from schemas.finding import Finding
 from agents.validation.errors import ValidationAgentError
 
-def _read_extracted_contract_clauses(run_path: Optional[Path]) -> list[dict[str, Any]]:
-    """Read extracted clauses from run-local extracted_contract.json if present."""
+
+def _read_extracted_contract(run_path: Optional[Path]) -> dict[str, Any] | None:
+    """Read run-local extracted_contract.json if present."""
     if run_path is None:
-        return []
+        return None
 
     extracted_path = run_path / "extracted_contract.json"
     if not extracted_path.exists():
-        return []
+        return None
 
     try:
         with open(extracted_path, "r", encoding="utf-8") as file:
@@ -28,10 +29,18 @@ def _read_extracted_contract_clauses(run_path: Optional[Path]) -> list[dict[str,
         raise ValidationAgentError(
             f"Expected '{extracted_path}' to contain a JSON object."
         )
+    return dict(payload)
+
+
+def _read_extracted_contract_clauses(run_path: Optional[Path]) -> list[dict[str, Any]]:
+    """Read extracted clauses from run-local extracted_contract.json if present."""
+    payload = _read_extracted_contract(run_path)
+    if payload is None:
+        return []
     raw_clauses = payload.get("clauses", [])
     if not isinstance(raw_clauses, list):
         raise ValidationAgentError(
-            f"Expected '{extracted_path}' field 'clauses' to be a list."
+            "Expected 'extracted_contract.json' field 'clauses' to be a list."
         )
     return [dict(clause) for clause in raw_clauses if isinstance(clause, Mapping)]
 

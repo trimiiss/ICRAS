@@ -323,6 +323,70 @@ class TestRunValidation:
         saved = json.loads((run_dir / "validation_findings.json").read_text())
         assert saved["findings"]
 
+    def test_low_ocr_confidence_creates_manual_review_finding(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        run_dir = _run_dir(tmp_path)
+        extracted_contract = {
+            "run_id": "test-run",
+            "document_id": "DOC-001",
+            "source_file": "contract.pdf",
+            "text_extraction_method": "ocr",
+            "ocr_metadata": {
+                "used": True,
+                "engine": "pymupdf_tesseract",
+                "pages_processed": 1,
+                "average_confidence": 0.62,
+                "low_confidence": True,
+                "manual_review_required": True,
+                "reason": "OCR was used because normal extraction failed.",
+                "pages": [
+                    {
+                        "page_number": 1,
+                        "used": True,
+                        "confidence": 0.62,
+                        "text_length": 120,
+                        "warning": "OCR confidence is low on page 1.",
+                    }
+                ],
+            },
+            "clauses": [
+                {
+                    "clause_type": "payment_terms",
+                    "title": "Payment Terms",
+                    "text": "Invoices are payable net 30.",
+                    "page_number": 1,
+                    "confidence": 0.95,
+                },
+                {
+                    "clause_type": "termination",
+                    "title": "Termination",
+                    "text": "Either party may terminate on notice.",
+                    "page_number": 1,
+                    "confidence": 0.95,
+                },
+            ],
+        }
+
+        result = run_validation(
+            context=_context(approval_policy=_approval_policy()),
+            clauses=None,
+            run_dir=run_dir,
+            evidence_index=_evidence_index(),
+            extracted_contract=extracted_contract,
+        )
+
+        finding = next(
+            finding
+            for finding in result["findings"]
+            if finding["issue_type"] == "low_ocr_confidence"
+        )
+        assert finding["field_name"] == "ocr_confidence"
+        assert finding["confidence"] == 0.62
+        assert finding["manual_review_required"] is True
+        assert finding["evidence"][0]["page_number"] == 1
+
     def test_reads_extracted_contract_and_existing_validation_results(
         self,
         tmp_path: Path,

@@ -13,7 +13,7 @@ from agents.extraction.fallback import (
     load_fallback_clauses,
 )
 from agents.extraction.helpers import get_primary_document, require_str
-from agents.extraction.pdf_text import extract_page_texts
+from agents.extraction.pdf_text import extract_pdf_text
 from utils.artifacts import validate_run_dir, write_model_json
 from utils.run_manager import append_audit_event
 
@@ -54,8 +54,48 @@ def run_extraction(
             "Validate the bundle before running extraction."
         )
 
-    page_texts = extract_page_texts(contract_path)
+    pdf_text_result = extract_pdf_text(contract_path)
+    page_texts = pdf_text_result.page_texts
     warnings: list[ExtractionWarning] = []
+    if pdf_text_result.ocr_metadata is not None:
+        for page in pdf_text_result.ocr_metadata.pages:
+            if not page.warning:
+                continue
+            warnings.append(
+                ExtractionWarning(
+                    warning_id=f"WARN-{len(warnings) + 1:03d}",
+                    message=str(page.warning),
+                )
+            )
+        if pdf_text_result.ocr_metadata.used:
+            append_audit_event(
+                run_path,
+                {
+                    "event": "ocr_used",
+                    "agent": "extraction_agent",
+                    "message": "OCR was used for pages without extractable text.",
+                    "engine": pdf_text_result.ocr_metadata.engine,
+                    "pages_processed": pdf_text_result.ocr_metadata.pages_processed,
+                    "average_confidence": (
+                        pdf_text_result.ocr_metadata.average_confidence
+                    ),
+                    "manual_review_required": (
+                        pdf_text_result.ocr_metadata.manual_review_required
+                    ),
+                },
+            )
+        else:
+            append_audit_event(
+                run_path,
+                {
+                    "event": "ocr_unavailable",
+                    "agent": "extraction_agent",
+                    "message": "OCR was attempted but no OCR text was available.",
+                    "engine": pdf_text_result.ocr_metadata.engine,
+                    "pages_processed": pdf_text_result.ocr_metadata.pages_processed,
+                    "reason": pdf_text_result.ocr_metadata.reason,
+                },
+            )
     if page_texts:
         candidates = split_into_candidates(page_texts)
         clauses, extraction_warnings = extract_required_clauses(
@@ -68,7 +108,7 @@ def run_extraction(
         clauses = []
         warnings.append(
             ExtractionWarning(
-                warning_id="WARN-001",
+                warning_id=f"WARN-{len(warnings) + 1:03d}",
                 message=(
                     f"No extractable text found in primary contract PDF: "
                     f"{contract_path.name}."
@@ -125,6 +165,8 @@ def run_extraction(
         source_file=str(primary_document["relative_path"]),
         fallback_assisted=fallback_assisted,
         fallback_reason=fallback_reason,
+        text_extraction_method=pdf_text_result.text_extraction_method,
+        ocr_metadata=pdf_text_result.ocr_metadata,
         clauses=clauses,
         warnings=warnings,
     )
@@ -145,6 +187,16 @@ def run_extraction(
             "low_confidence_count": low_confidence_count,
             "fallback_assisted": fallback_assisted,
             "fallback_reason": fallback_reason,
+            "text_extraction_method": pdf_text_result.text_extraction_method,
+            "ocr_used": bool(
+                pdf_text_result.ocr_metadata
+                and pdf_text_result.ocr_metadata.used
+            ),
+            "ocr_average_confidence": (
+                pdf_text_result.ocr_metadata.average_confidence
+                if pdf_text_result.ocr_metadata
+                else None
+            ),
         },
     )
 

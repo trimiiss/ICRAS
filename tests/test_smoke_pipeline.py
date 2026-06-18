@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pymupdf
 
+from agents.compliance_agent import run_compliance_review
 from agents.extraction import run_extraction
 from agents.intake import run_intake
 from agents.risk import run_risk_assessment
@@ -26,6 +27,7 @@ EXPECTED_SMOKE_FILES = {
     "extracted_contract.json",
     "validation_findings.json",
     "clause_analysis.json",
+    "compliance_findings.json",
     "audit_log.md",
 }
 
@@ -87,6 +89,7 @@ def test_clean_nda_full_flow_creates_smoke_artifacts(tmp_path: Path) -> None:
     assert "extraction_completed" in audit_log
     assert "validation_completed" in audit_log
     assert "risk_scoring_completed" in audit_log
+    assert "compliance_completed" in audit_log
 
 
 def test_missing_required_field_is_flagged_by_validation(tmp_path: Path) -> None:
@@ -190,8 +193,15 @@ def test_low_confidence_extraction_fallback_continues_pipeline(
         validation_result=validation_result["validation_result"],
         run_dir=run_dir,
     )
+    compliance_result = run_compliance_review(
+        context=intake_result["context_packet"],
+        extracted_contract=extraction_result["extracted_contract"],
+        run_dir=run_dir,
+        evidence_index=evidence_result["evidence_index"],
+    )
 
     _assert_expected_files(run_dir)
     assert extraction_result["extracted_contract"]["fallback_assisted"] is True
     assert validation_result["validation_result"]["run_id"] == run_info["run_id"]
     assert risk_result["clause_analysis"]["run_id"] == run_info["run_id"]
+    assert compliance_result["compliance_result"]["run_id"] == run_info["run_id"]

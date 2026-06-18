@@ -36,6 +36,7 @@ def finalize_pipeline(state: Mapping[str, Any]) -> dict[str, Any]:
     document_inventory = require_state_mapping(state, "document_inventory")
     validation_result = require_state_mapping(state, "validation_result")
     risk_result = require_state_mapping(state, "risk_result")
+    compliance_result = require_state_mapping(state, "compliance_result")
     counterparty_resolution = require_state_mapping(state, "counterparty_resolution")
     final_findings = merge_deduplicate_sort_findings(
         run_id=run_id,
@@ -43,6 +44,7 @@ def finalize_pipeline(state: Mapping[str, Any]) -> dict[str, Any]:
         validation_result=validation_result,
         risk_result=risk_result,
         counterparty_resolution=counterparty_resolution,
+        compliance_result=compliance_result,
     )
     overall_severity = highest_overall_severity(
         [finding.severity for finding in final_findings]

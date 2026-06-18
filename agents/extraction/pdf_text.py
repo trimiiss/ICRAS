@@ -1,5 +1,7 @@
 """Born-digital PDF text extraction for clause extraction."""
 
+import re
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -9,10 +11,29 @@ from agents.extraction.constants import PAGE_NUMBER_PATTERN
 from agents.extraction.errors import ExtractionAgentError
 from agents.extraction.helpers import coerce_bbox, union_bboxes
 from agents.extraction.models import PageText, TextLine
+from schemas.extracted_clause import OcrMetadata, OcrPageResult
+
+
+MIN_USEFUL_TEXT_CHARS = 20
+OCR_ENGINE_NAME = "pymupdf_tesseract"
+
+
+@dataclass(frozen=True)
+class PdfTextExtractionResult:
+    """PDF text extraction result with optional OCR metadata."""
+
+    page_texts: list[PageText]
+    text_extraction_method: str
+    ocr_metadata: OcrMetadata | None
 
 
 def extract_page_texts(contract_path: Path) -> list[PageText]:
     """Extract readable page text from a born-digital PDF."""
+    return extract_pdf_text(contract_path).page_texts
+
+
+def extract_pdf_text(contract_path: Path) -> PdfTextExtractionResult:
+    """Extract page text, using OCR only for pages without useful text."""
     try:
         pdf = pymupdf.open(contract_path)
     except Exception as exc:
@@ -21,23 +42,41 @@ def extract_page_texts(contract_path: Path) -> list[PageText]:
         ) from exc
 
     page_texts: list[PageText] = []
+    ocr_pages: list[OcrPageResult] = []
     try:
         for index, page in enumerate(pdf, start=1):
             lines = _extract_text_lines(page, index)
+            if not _has_useful_text(lines):
+                lines, ocr_page = _extract_ocr_text_lines(page, index)
+                ocr_pages.append(ocr_page)
+
             text = "\n".join(line.text for line in lines)
             if lines:
-                page_texts.append(
-                    PageText(page_number=index, text=text, lines=lines)
-                )
+                page_texts.append(PageText(page_number=index, text=text, lines=lines))
     finally:
         pdf.close()
 
-    return _filter_repeated_page_artifacts(page_texts)
+    filtered_pages = _filter_repeated_page_artifacts(page_texts)
+    ocr_metadata = _build_ocr_metadata(ocr_pages)
+    text_extraction_method = _text_extraction_method(filtered_pages, ocr_metadata)
+    return PdfTextExtractionResult(
+        page_texts=filtered_pages,
+        text_extraction_method=text_extraction_method,
+        ocr_metadata=ocr_metadata,
+    )
 
 
 def _extract_text_lines(page: pymupdf.Page, page_number: int) -> list[TextLine]:
     """Extract text lines with bounding boxes from one PDF page."""
     raw_text = page.get_text("dict")
+    return _extract_text_lines_from_raw(raw_text, page_number)
+
+
+def _extract_text_lines_from_raw(
+    raw_text: Mapping[str, Any],
+    page_number: int,
+) -> list[TextLine]:
+    """Extract text lines from one PyMuPDF text dictionary."""
     blocks = raw_text.get("blocks", [])
     if not isinstance(blocks, list):
         return []
@@ -61,6 +100,53 @@ def _extract_text_lines(page: pymupdf.Page, page_number: int) -> list[TextLine]:
             offset = line.char_end + 1
 
     return text_lines
+
+
+def _extract_ocr_text_lines(
+    page: pymupdf.Page,
+    page_number: int,
+) -> tuple[list[TextLine], OcrPageResult]:
+    """Extract text lines from one page using PyMuPDF OCR."""
+    try:
+        text_page = page.get_textpage_ocr(full=True)
+        raw_text = page.get_text("dict", textpage=text_page)
+    except Exception as exc:
+        warning = (
+            f"OCR unavailable for page {page_number}: {exc}. "
+            "Install or configure Tesseract for PyMuPDF OCR."
+        )
+        return [], OcrPageResult(
+            page_number=page_number,
+            used=False,
+            confidence=None,
+            text_length=0,
+            warning=warning,
+        )
+
+    lines = _extract_text_lines_from_raw(raw_text, page_number)
+    normalized_text = _normalized_lines_text(lines)
+    if not normalized_text:
+        return [], OcrPageResult(
+            page_number=page_number,
+            used=False,
+            confidence=0.0,
+            text_length=0,
+            warning=f"OCR produced no readable text on page {page_number}.",
+        )
+
+    confidence = _estimate_ocr_confidence(normalized_text)
+    warning = (
+        f"OCR confidence is low on page {page_number}."
+        if confidence < 0.75
+        else None
+    )
+    return lines, OcrPageResult(
+        page_number=page_number,
+        used=True,
+        confidence=confidence,
+        text_length=len(normalized_text),
+        warning=warning,
+    )
 
 
 def _text_line_from_raw(
@@ -138,3 +224,84 @@ def _filter_repeated_page_artifacts(page_texts: list[PageText]) -> list[PageText
 def _line_key(text: str) -> str:
     """Normalize a line for repeated header/footer detection."""
     return " ".join(text.casefold().split())
+
+
+def _has_useful_text(lines: list[TextLine]) -> bool:
+    """Return whether normal PDF extraction produced useful page text."""
+    return len(_normalized_lines_text(lines)) >= MIN_USEFUL_TEXT_CHARS
+
+
+def _normalized_lines_text(lines: list[TextLine]) -> str:
+    """Return normalized text from extracted page lines."""
+    return " ".join(line.text for line in lines).strip()
+
+
+def _estimate_ocr_confidence(text: str) -> float:
+    """Estimate OCR quality deterministically from text density and shape."""
+    normalized = " ".join(text.split())
+    if not normalized:
+        return 0.0
+
+    non_space = [char for char in normalized if not char.isspace()]
+    if not non_space:
+        return 0.0
+
+    alnum_ratio = sum(char.isalnum() for char in non_space) / len(non_space)
+    words = re.findall(r"[A-Za-z0-9]{2,}", normalized)
+    word_density = min(len(words) / 60, 1.0)
+    length_score = min(len(normalized) / 500, 1.0)
+    confidence = 0.35 + (0.35 * alnum_ratio) + (0.20 * word_density) + (0.10 * length_score)
+    return round(min(max(confidence, 0.0), 0.99), 2)
+
+
+def _build_ocr_metadata(ocr_pages: list[OcrPageResult]) -> OcrMetadata | None:
+    """Build run-level OCR metadata when OCR was attempted."""
+    if not ocr_pages:
+        return None
+
+    used_pages = [page for page in ocr_pages if page.used]
+    confidences = [
+        float(page.confidence)
+        for page in used_pages
+        if page.confidence is not None
+    ]
+    average_confidence = (
+        round(sum(confidences) / len(confidences), 2)
+        if confidences
+        else None
+    )
+    low_confidence = any(
+        page.confidence is not None and page.confidence < 0.75
+        for page in used_pages
+    )
+    unavailable = any(not page.used and page.warning for page in ocr_pages)
+    reason = (
+        "OCR was used because normal PDF extraction produced no useful text."
+        if used_pages
+        else "OCR was attempted because normal PDF extraction produced no useful text."
+    )
+    if unavailable and not used_pages:
+        reason = "OCR was unavailable after normal PDF extraction produced no useful text."
+
+    return OcrMetadata(
+        used=bool(used_pages),
+        engine=OCR_ENGINE_NAME,
+        pages_processed=len(ocr_pages),
+        average_confidence=average_confidence,
+        low_confidence=low_confidence,
+        manual_review_required=low_confidence,
+        reason=reason,
+        pages=ocr_pages,
+    )
+
+
+def _text_extraction_method(
+    page_texts: list[PageText],
+    ocr_metadata: OcrMetadata | None,
+) -> str:
+    """Return the primary extraction method for the contract artifact."""
+    if ocr_metadata is not None and ocr_metadata.used:
+        return "ocr"
+    if page_texts:
+        return "digital"
+    return "none"
