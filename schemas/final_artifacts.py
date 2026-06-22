@@ -210,7 +210,10 @@ class PipelineMetrics(BaseModel):
     )
     determinism_check: str = Field(
         ...,
-        description="PASS when the latest same-bundle comparison is stable, else FAIL.",
+        description=(
+            "PASS when the latest same-bundle comparison is stable, FAIL when "
+            "differences are found, or REUSED when duplicate artifacts were reused."
+        ),
     )
     determinism_baseline_run_id: Optional[str] = Field(
         None,
@@ -227,6 +230,22 @@ class PipelineMetrics(BaseModel):
     determinism_differences: List[str] = Field(
         default_factory=list,
         description="Non-timestamp differences found between compared runs.",
+    )
+    idempotency_status: str = Field(
+        default="new",
+        description="Whether this run processed new inputs or reused a duplicate run.",
+    )
+    idempotency_baseline_run_id: Optional[str] = Field(
+        None,
+        description="Completed run reused when this run was detected as a duplicate.",
+    )
+    external_posting_allowed: bool = Field(
+        default=True,
+        description="Whether downstream tracker/CLM posting is allowed for this run.",
+    )
+    posting_suppression_reason: Optional[str] = Field(
+        None,
+        description="Reason external posting was suppressed, if applicable.",
     )
     overall_severity: Severity = Field(
         ..., description="Highest final finding severity."

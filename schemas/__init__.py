@@ -37,6 +37,7 @@ from schemas.extracted_clause import (
 )
 from schemas.finding import Finding
 from schemas.final_artifacts import FinalFindingsResult, PipelineMetrics
+from schemas.idempotency_result import FingerprintedFile, IdempotencyResult
 from schemas.obligation_result import ObligationRecord, ObligationRegisterResult
 from schemas.policy_rules import (
     ApprovalThreshold,
@@ -113,6 +114,8 @@ __all__ = [
     "ApprovalStatus",
     "FinalFindingsResult",
     "PipelineMetrics",
+    "FingerprintedFile",
+    "IdempotencyResult",
     "ApprovalPostingData",
     "ArtifactReference",
     "ContractPostingData",

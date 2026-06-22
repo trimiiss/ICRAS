@@ -70,6 +70,7 @@ def _print_run_summary(result: Mapping[str, Any]) -> None:
     print(f"Run ID: {result.get('run_id', '')}")
     print(f"Run directory: {result.get('run_dir', '')}")
     print(f"Pipeline status: {_require_metrics_status(metrics)}")
+    _print_idempotency_status(result)
 
     print("\nAgent steps:")
     for event in _step_events(result.get("step_events")):
@@ -145,6 +146,21 @@ def _print_approval_route(approval_packet: Any) -> None:
         if isinstance(finding_ids, Sequence) and not isinstance(finding_ids, (str, bytes)):
             finding_text = ", ".join(str(finding_id) for finding_id in finding_ids)
             print(f"    Findings: {finding_text or 'None'}")
+
+
+def _print_idempotency_status(result: Mapping[str, Any]) -> None:
+    """Print duplicate-run handling details when available."""
+    idempotency = result.get("idempotency_result")
+    if not isinstance(idempotency, Mapping):
+        return
+    status = str(idempotency.get("status") or "new")
+    print(f"Idempotency: {status}")
+    baseline_run_id = idempotency.get("baseline_run_id")
+    if baseline_run_id:
+        print(f"Duplicate of run: {baseline_run_id}")
+    if idempotency.get("external_posting_allowed") is False:
+        reason = str(idempotency.get("posting_suppression_reason") or "")
+        print(f"External posting: suppressed ({reason})")
 
 
 def _route_label(category: str) -> str:

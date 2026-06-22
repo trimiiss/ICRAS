@@ -21,6 +21,7 @@ from schemas.extracted_clause import (
     OcrPageResult,
 )
 from schemas.finding import Finding
+from schemas.idempotency_result import IdempotencyResult
 from schemas.policy_rules import PolicyRules
 from schemas.posting_payload import (
     ApprovalPostingData,
@@ -439,3 +440,34 @@ class TestPostingPayload:
                 source_file="contract.pdf",
                 jurisdiction="Delaware, USA",
             )
+
+
+# ---------------------------------------------------------------------------
+# IdempotencyResult
+# ---------------------------------------------------------------------------
+
+class TestIdempotencyResult:
+    def test_valid_duplicate_idempotency_result(self):
+        result = IdempotencyResult(
+            run_id="20250101_120001_def67890",
+            status="duplicate",
+            decision="Duplicate input fingerprint matched completed run baseline-run.",
+            contract_sha256="a" * 64,
+            input_fingerprint_sha256="b" * 64,
+            fingerprinted_files=[
+                {
+                    "path": "contract.pdf",
+                    "sha256": "a" * 64,
+                }
+            ],
+            baseline_run_id="baseline-run",
+            baseline_run_dir="/tmp/runs/baseline-run",
+            external_posting_allowed=False,
+            posting_suppression_reason="Duplicate input fingerprint matched baseline-run.",
+            copied_artifacts={"metrics": "/tmp/runs/current/metrics.json"},
+            artifact_paths={"metrics": "/tmp/runs/current/metrics.json"},
+        )
+
+        assert result.status == "duplicate"
+        assert result.fingerprint_algorithm == "sha256"
+        assert result.external_posting_allowed is False

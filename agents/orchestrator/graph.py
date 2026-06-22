@@ -22,6 +22,8 @@ from agents.orchestrator.nodes import (
     evidence_index_node,
     extraction_node,
     finalize_node,
+    idempotency_check_node,
+    idempotent_reuse_node,
     intake_node,
     load_bundle_node,
     obligation_register_node,
@@ -38,6 +40,14 @@ def build_pipeline_graph() -> Any:
     """Build the LangGraph workflow."""
     builder = StateGraph(PipelineState)
     builder.add_node("create_run", _pipeline_node("create_run", "orchestrator_agent", create_run_node))
+    builder.add_node(
+        "idempotency_check",
+        _pipeline_node("idempotency_check", "orchestrator_agent", idempotency_check_node),
+    )
+    builder.add_node(
+        "idempotent_reuse",
+        _pipeline_node("idempotent_reuse", "orchestrator_agent", idempotent_reuse_node),
+    )
     builder.add_node("load_bundle", _pipeline_node("load_bundle", "bundle_loader", load_bundle_node))
     builder.add_node("intake", _pipeline_node("intake", "intake_agent", intake_node))
     builder.add_node("evidence_index", _pipeline_node("evidence_index", "evidence_indexer", evidence_index_node))
@@ -55,7 +65,13 @@ def build_pipeline_graph() -> Any:
 
     builder.add_edge(START, "create_run")
     builder.add_edge("create_run", "load_bundle")
-    builder.add_edge("load_bundle", "intake")
+    builder.add_edge("load_bundle", "idempotency_check")
+    builder.add_conditional_edges(
+        "idempotency_check",
+        _route_after_idempotency_check,
+        {"new": "intake", "duplicate": "idempotent_reuse"},
+    )
+    builder.add_edge("idempotent_reuse", END)
     builder.add_edge("intake", "evidence_index")
     builder.add_edge("evidence_index", "extraction")
     builder.add_edge("extraction", "counterparty")
@@ -68,6 +84,14 @@ def build_pipeline_graph() -> Any:
     builder.add_edge("obligation_register", "agent_h_finalize")
     builder.add_edge("agent_h_finalize", END)
     return builder.compile()
+
+
+def _route_after_idempotency_check(state: PipelineState) -> str:
+    """Route duplicate runs directly to idempotent artifact reuse."""
+    idempotency_result = _as_mapping(state.get("idempotency_result"))
+    if idempotency_result.get("status") == "duplicate":
+        return "duplicate"
+    return "new"
 
 
 def _pipeline_node(
@@ -301,4 +325,3 @@ def _audit_output_paths(
             if isinstance(path, str)
         }
     return {key: outputs[key] for key in sorted(outputs)}
-

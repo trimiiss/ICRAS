@@ -83,6 +83,7 @@ def _build_response(
     """Create the endpoint response from final pipeline state."""
     approval_packet = as_mapping(result.get("approval_packet"))
     decision = as_mapping(approval_packet.get("decision"))
+    idempotency_result = as_mapping(result.get("idempotency_result"))
     metrics = as_mapping(result.get("metrics"))
     return ContractReviewResponse(
         run_id=str(result.get("run_id") or ""),
@@ -90,6 +91,21 @@ def _build_response(
         approval_status=(
             str(decision.get("status"))
             if decision.get("status") is not None
+            else None
+        ),
+        idempotency_status=(
+            str(idempotency_result.get("status"))
+            if idempotency_result.get("status") is not None
+            else None
+        ),
+        duplicate_of_run_id=(
+            str(idempotency_result.get("baseline_run_id"))
+            if idempotency_result.get("baseline_run_id") is not None
+            else None
+        ),
+        external_posting_allowed=(
+            bool(idempotency_result.get("external_posting_allowed"))
+            if idempotency_result.get("external_posting_allowed") is not None
             else None
         ),
         bundle_path=bundle_path,

@@ -36,6 +36,7 @@ def create_run_folder(
     bundle_path: str,
     runs_dir: Optional[Path] = None,
     config: Optional[Dict[str, Any]] = None,
+    metadata_extra: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Create a new run folder with initial metadata, config, and audit log.
 
@@ -88,6 +89,8 @@ def create_run_folder(
         "created_at": now_utc,
         "status": "initialized",
     }
+    if metadata_extra:
+        metadata.update(metadata_extra)
 
     # Build config
     if config is None:
@@ -169,6 +172,27 @@ def update_run_status(
     if error_message is not None:
         metadata["error_message"] = error_message
 
+    _write_json(metadata_path, metadata)
+    return metadata
+
+
+def update_run_metadata(
+    run_dir: str | Path,
+    updates: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Merge additional metadata fields into a run folder's metadata.json."""
+    metadata_path = Path(run_dir) / "metadata.json"
+    if not metadata_path.is_file():
+        raise FileNotFoundError(
+            f"Run metadata file does not exist: {metadata_path}. "
+            "Create the run folder before updating metadata."
+        )
+
+    with open(metadata_path, "r", encoding="utf-8") as f:
+        metadata: Dict[str, Any] = json.load(f)
+
+    metadata.update(updates)
+    metadata["updated_at"] = datetime.now(timezone.utc).isoformat()
     _write_json(metadata_path, metadata)
     return metadata
 
