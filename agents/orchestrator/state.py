@@ -62,6 +62,7 @@ class PipelineState(TypedDict, total=False):
     final_findings: dict[str, Any]
     approval_packet: dict[str, Any]
     posting_payload: dict[str, Any]
+    jira_posting_result: dict[str, Any]
     metrics: dict[str, Any]
     idempotency_result: dict[str, Any]
     artifact_paths: Annotated[dict[str, str], merge_dicts]
@@ -82,6 +83,7 @@ PIPELINE_STEP_ORDER: tuple[str, ...] = (
     "anomaly",
     "obligation_register",
     "agent_h_finalize",
+    "jira_posting",
 )
 
 STEP_INPUT_ARTIFACTS: dict[str, tuple[str, ...]] = {
@@ -107,4 +109,10 @@ STEP_INPUT_ARTIFACTS: dict[str, tuple[str, ...]] = {
         "obligations",
     ),
     "idempotent_reuse": ("idempotency_result",),
+    "jira_posting": (
+        "approval_packet",
+        "posting_payload",
+        "idempotency_result",
+        "metrics",
+    ),
 }

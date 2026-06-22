@@ -129,6 +129,9 @@ def write_final_audit_markdown(
         f"- Idempotency Baseline Run ID: {metrics.get('idempotency_baseline_run_id') or 'None'}",
         f"- External Posting Allowed: {'yes' if metrics.get('external_posting_allowed', True) else 'no'}",
         f"- Posting Suppression Reason: {metrics.get('posting_suppression_reason') or 'None'}",
+        f"- Jira Posting Status: {metrics.get('jira_posting_status') or 'None'}",
+        f"- Jira Issue Key: {metrics.get('jira_issue_key') or 'None'}",
+        f"- Jira Posting Reason: {metrics.get('jira_posting_reason') or 'None'}",
         "",
         "## Workflow Order",
     ]
