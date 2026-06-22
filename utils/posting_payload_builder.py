@@ -6,13 +6,16 @@ from typing import Any, Mapping, Optional, Sequence
 from schemas.approval_packet import ApprovalRoute, ApprovalStatus
 from schemas.common import Severity
 from schemas.finding import Finding
+from schemas.obligation_result import ObligationRecord
 from schemas.posting_payload import (
     ApprovalPostingData,
     ArtifactReference,
     ContractPostingData,
     CounterpartyPostingData,
     DecisionPostingData,
+    ObligationPostingData,
     PostingPayload,
+    RiskFindingPostingData,
     RiskPostingData,
 )
 from utils.collections import ordered_unique
@@ -30,6 +33,7 @@ def build_posting_payload(
     risk_summary: str,
     final_findings: Sequence[Finding],
     approval_routes: Sequence[ApprovalRoute],
+    obligation_register: Mapping[str, Any],
     artifact_paths: Mapping[str, str],
 ) -> PostingPayload:
     """Build the vendor-neutral CLM posting payload."""
@@ -53,6 +57,7 @@ def build_posting_payload(
             routes=list(approval_routes),
             next_approvers=_next_approvers(approval_routes),
         ),
+        obligations=_obligation_posting_data(obligation_register),
         artifacts=_artifact_references(artifact_paths),
         artifact_references=dict(artifact_paths),
         source_contract_file=str(context.get("contract_file") or ""),
@@ -136,7 +141,58 @@ def _risk_posting_data(
             1 for finding in final_findings if finding.severity == Severity.HIGH
         ),
         categories=sorted({finding.category for finding in final_findings}),
+        findings=[_risk_finding_posting_data(finding) for finding in final_findings],
     )
+
+
+def _risk_finding_posting_data(finding: Finding) -> RiskFindingPostingData:
+    """Map an internal final finding into the CLM risk-finding schema."""
+    return RiskFindingPostingData(
+        finding_id=finding.finding_id,
+        category=finding.category,
+        title=finding.title,
+        description=finding.description,
+        severity=finding.severity,
+        confidence=finding.confidence,
+        evidence=list(finding.evidence),
+        recommendation=finding.recommendation,
+        field_name=finding.field_name,
+        issue_type=finding.issue_type,
+    )
+
+
+def _obligation_posting_data(
+    obligation_register: Mapping[str, Any],
+) -> list[ObligationPostingData]:
+    """Map obligation-register records into the CLM payload schema."""
+    raw_obligations = obligation_register.get("obligations", [])
+    if not isinstance(raw_obligations, Sequence) or isinstance(
+        raw_obligations, (str, bytes)
+    ):
+        return []
+
+    mapped: list[ObligationPostingData] = []
+    for raw_obligation in raw_obligations:
+        obligation = ObligationRecord.model_validate(raw_obligation)
+        mapped.append(
+            ObligationPostingData(
+                obligation_id=obligation.obligation_id,
+                obligation_type=obligation.obligation_type,
+                responsible_party=obligation.responsible_party,
+                obligation_summary=obligation.obligation_summary,
+                due_date=obligation.due_date,
+                timing_trigger=obligation.timing_trigger,
+                is_recurring=obligation.is_recurring,
+                recurrence_frequency=obligation.recurrence_frequency,
+                source_file=obligation.source_file,
+                source_page=obligation.source_page,
+                evidence_id=obligation.evidence_id,
+                document_id=obligation.document_id,
+                clause_reference=obligation.clause_reference,
+                evidence_pointer=obligation.evidence_pointer,
+            )
+        )
+    return mapped
 
 
 def _artifact_references(artifact_paths: Mapping[str, str]) -> list[ArtifactReference]:

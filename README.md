@@ -25,6 +25,7 @@ ICRAS runs these functional components in order:
 ```text
 .
 ├── main.py                         # CLI entry point
+├── streamlit_app.py                # Streamlit demo interface
 ├── agents/
 │   ├── intake/                     # Bundle validation and context creation
 │   ├── extraction/                 # PDF text extraction and clause modeling
@@ -98,6 +99,16 @@ python main.py --bundle data/bundles/net60_policy_demo
 
 The CLI prints the selected bundle, step status, final decision, approval route, and generated artifact paths.
 
+## Streamlit Demo
+
+Run the visual demo from the repository root:
+
+```bash
+streamlit run streamlit_app.py
+```
+
+The demo supports selecting an existing bundle from `data/bundles/` or uploading a PDF contract. Uploaded PDFs are converted into runtime bundles with default policy files, then processed by the same pipeline as the CLI and API. The interface shows the final decision, approval routing, detected risks, generated artifact downloads, and audit-log details.
+
 ## LangChain Showcase
 
 After a pipeline run completes, generate a deterministic approval brief from the
@@ -155,7 +166,7 @@ Important outputs:
 
 - `approval_packet.json` contains the final decision, approval route, grouped exceptions, and evidence-backed reasons.
 - `exceptions.md` is the human-readable exception summary.
-- `posting_payload.json` is a vendor-neutral CLM payload grouped into contract, counterparty, decision, risk, approval, and artifact sections.
+- `posting_payload.json` is a vendor-neutral CLM payload grouped into contract, counterparty, decision, risk findings, approval routing, obligations, and artifact sections.
 - `jira_posting_result.json` records whether Jira posting was created, skipped, disabled, or failed without exposing secrets.
 - `audit_log.md` and `audit_log.jsonl` provide traceable execution history.
 - `obligations.csv` provides a tabular obligation register for follow-up workflows.
@@ -209,7 +220,7 @@ pytest -q
 Run Ruff:
 
 ```bash
-ruff check agents tests utils schemas
+ruff check agents tests utils schemas streamlit_app.py
 ```
 
 The test suite covers bundle loading, run management, extraction, validation, counterparty matching, risk assessment, obligation generation, orchestration, policy-driven decisions, and end-to-end smoke scenarios.

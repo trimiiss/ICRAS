@@ -370,6 +370,20 @@ def _posting_payload(
             "critical_finding_count": 0,
             "high_finding_count": 1,
             "categories": ["legal"],
+            "findings": [
+                {
+                    "finding_id": "F-001",
+                    "category": "legal",
+                    "title": "Missing liability cap",
+                    "description": "The contract does not include a liability cap.",
+                    "severity": "HIGH",
+                    "confidence": 0.95,
+                    "evidence": [_evidence()],
+                    "recommendation": "Add a liability cap or obtain legal approval.",
+                    "field_name": "liability_cap",
+                    "issue_type": "missing_field",
+                }
+            ],
         },
         "approval": {
             "approval_required": not approved,
@@ -383,6 +397,7 @@ def _posting_payload(
             ],
             "next_approvers": ["legal_counsel"],
         },
+        "obligations": [],
         "artifacts": [],
         "artifact_references": {},
         "external_posting_allowed": external_posting_allowed,

@@ -66,7 +66,9 @@ from schemas.posting_payload import (
     ContractPostingData,
     CounterpartyPostingData,
     DecisionPostingData,
+    ObligationPostingData,
     PostingPayload,
+    RiskFindingPostingData,
     RiskPostingData,
 )
 from schemas.validation_result import ValidatedContractField, ValidationResult
@@ -133,7 +135,9 @@ __all__ = [
     "ContractPostingData",
     "CounterpartyPostingData",
     "DecisionPostingData",
+    "ObligationPostingData",
     "PostingPayload",
+    "RiskFindingPostingData",
     "RiskPostingData",
     "ValidatedContractField",
     "ValidationResult",

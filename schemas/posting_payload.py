@@ -6,7 +6,7 @@ from typing import Dict, List, Literal, Optional
 from pydantic import BaseModel, Field
 
 from schemas.approval_packet import ApprovalRoute, ApprovalStatus
-from schemas.common import ConfidenceScore, Severity
+from schemas.common import ConfidenceScore, EvidencePointer, Severity
 
 
 class ContractPostingData(BaseModel):
@@ -64,6 +64,31 @@ class DecisionPostingData(BaseModel):
     )
 
 
+class RiskFindingPostingData(BaseModel):
+    """One evidence-backed finding exposed to a downstream CLM record."""
+
+    finding_id: str = Field(..., description="Stable finding identifier.")
+    category: str = Field(..., description="Finding category.")
+    title: str = Field(..., description="Short finding title.")
+    description: str = Field(..., description="Finding detail for reviewers.")
+    severity: Severity = Field(..., description="Finding severity.")
+    confidence: ConfidenceScore = Field(
+        ..., description="Confidence that this finding is accurate."
+    )
+    evidence: List[EvidencePointer] = Field(
+        ..., min_length=1, description="Evidence supporting this finding."
+    )
+    recommendation: Optional[str] = Field(
+        default=None, description="Recommended remediation or approval action."
+    )
+    field_name: Optional[str] = Field(
+        default=None, description="Related contract field, when available."
+    )
+    issue_type: Optional[str] = Field(
+        default=None, description="Machine-readable finding type."
+    )
+
+
 class RiskPostingData(BaseModel):
     """Risk summary data for downstream dashboards and workflow routing."""
 
@@ -81,6 +106,10 @@ class RiskPostingData(BaseModel):
     categories: List[str] = Field(
         default_factory=list,
         description="Sorted final finding categories.",
+    )
+    findings: List[RiskFindingPostingData] = Field(
+        ...,
+        description="Evidence-backed risk findings mapped for CLM display.",
     )
 
 
@@ -114,6 +143,45 @@ class ArtifactReference(BaseModel):
     )
 
 
+class ObligationPostingData(BaseModel):
+    """One contract obligation mapped for a mock CLM obligation register."""
+
+    obligation_id: str = Field(..., description="Stable obligation identifier.")
+    obligation_type: str = Field(..., description="Canonical obligation category.")
+    responsible_party: str = Field(
+        ..., description="Party responsible for satisfying the obligation."
+    )
+    obligation_summary: str = Field(..., description="Short obligation summary.")
+    due_date: Optional[str] = Field(
+        default=None, description="Absolute due date, when known."
+    )
+    timing_trigger: Optional[str] = Field(
+        default=None, description="Relative timing trigger, when known."
+    )
+    is_recurring: bool = Field(
+        ..., description="Whether the obligation repeats over time."
+    )
+    recurrence_frequency: Optional[str] = Field(
+        default=None, description="Recurring cadence, when known."
+    )
+    source_file: str = Field(..., description="Source contract filename.")
+    source_page: Optional[int] = Field(
+        default=None, description="1-indexed source page number, when available."
+    )
+    evidence_id: Optional[str] = Field(
+        default=None, description="Evidence index identifier, when available."
+    )
+    document_id: Optional[str] = Field(
+        default=None, description="Document inventory identifier, when available."
+    )
+    clause_reference: Optional[str] = Field(
+        default=None, description="Clause or section reference, when available."
+    )
+    evidence_pointer: EvidencePointer = Field(
+        ..., description="Primary source pointer for traceability."
+    )
+
+
 class PostingPayload(BaseModel):
     """Vendor-neutral payload suitable for a future CLM integration adapter."""
 
@@ -144,6 +212,10 @@ class PostingPayload(BaseModel):
     )
     approval: ApprovalPostingData = Field(
         ..., description="Approval workflow routing data."
+    )
+    obligations: List[ObligationPostingData] = Field(
+        ...,
+        description="Mapped obligation records for downstream CLM tracking.",
     )
     artifacts: List[ArtifactReference] = Field(
         default_factory=list,

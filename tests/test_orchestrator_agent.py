@@ -366,6 +366,8 @@ def test_run_pipeline_executes_agent_h_graph(tmp_path: Path, monkeypatch) -> Non
     assert posting_payload.counterparty.name
     assert posting_payload.decision.status.value in {"AUTO_APPROVE", "ESCALATE"}
     assert posting_payload.risk.summary
+    assert posting_payload.risk.findings
+    assert posting_payload.obligations
     assert posting_payload.approval.routes
     assert posting_payload.approval.next_approvers
     assert posting_payload.artifacts

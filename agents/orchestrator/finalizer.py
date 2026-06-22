@@ -39,6 +39,7 @@ def finalize_pipeline(state: Mapping[str, Any]) -> dict[str, Any]:
     compliance_result = require_state_mapping(state, "compliance_result")
     anomaly_result = require_state_mapping(state, "anomaly_result")
     counterparty_resolution = require_state_mapping(state, "counterparty_resolution")
+    obligation_register = require_state_mapping(state, "obligation_register")
     final_findings = merge_deduplicate_sort_findings(
         run_id=run_id,
         context=context,
@@ -119,6 +120,7 @@ def finalize_pipeline(state: Mapping[str, Any]) -> dict[str, Any]:
         risk_summary=summary,
         final_findings=final_findings,
         approval_routes=approval_routes,
+        obligation_register=obligation_register,
         artifact_paths=artifact_paths,
     )
     determinism_result = build_determinism_result(
