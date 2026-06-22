@@ -1,0 +1,4 @@
+{
+  "tests/test_streamlit_app.py::test_discover_bundles_returns_valid_bundle_dirs": true,
+  "tests/test_streamlit_app.py::test_audit_info_and_artifact_ordering": true
+}

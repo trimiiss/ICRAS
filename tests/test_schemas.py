@@ -29,7 +29,9 @@ from schemas.posting_payload import (
     ContractPostingData,
     CounterpartyPostingData,
     DecisionPostingData,
+    ObligationPostingData,
     PostingPayload,
+    RiskFindingPostingData,
     RiskPostingData,
 )
 from schemas.risk_result import RiskResult
@@ -408,12 +410,43 @@ class TestPostingPayload:
                 critical_finding_count=0,
                 high_finding_count=1,
                 categories=["clause_risk"],
+                findings=[
+                    RiskFindingPostingData(
+                        finding_id="F-001",
+                        category="clause_risk",
+                        title="Missing liability cap",
+                        description="The contract lacks a liability cap.",
+                        severity="HIGH",
+                        confidence=0.95,
+                        evidence=[_valid_evidence()],
+                        recommendation="Add a liability cap or obtain approval.",
+                        field_name="liability_cap",
+                        issue_type="missing_field",
+                    )
+                ],
             ),
             approval=ApprovalPostingData(
                 approval_required=True,
                 routes=[],
                 next_approvers=["legal_counsel"],
             ),
+            obligations=[
+                ObligationPostingData(
+                    obligation_id="OBL-001",
+                    obligation_type="payment",
+                    responsible_party="Customer",
+                    obligation_summary="Customer must pay invoices net 30.",
+                    timing_trigger="net 30",
+                    is_recurring=True,
+                    recurrence_frequency="per invoice",
+                    source_file="contract.pdf",
+                    source_page=4,
+                    evidence_id="EV-004",
+                    document_id="DOC-002",
+                    clause_reference="5",
+                    evidence_pointer=_valid_evidence(),
+                )
+            ],
             artifacts=[
                 ArtifactReference(
                     name="approval_packet",
@@ -430,6 +463,8 @@ class TestPostingPayload:
         assert payload.payload_type == "CLM_POSTING_PAYLOAD"
         assert payload.contract.contract_id == "clean_nda:DOC-002:contract.pdf"
         assert payload.decision.status.value == "ESCALATE"
+        assert payload.risk.findings[0].finding_id == "F-001"
+        assert payload.obligations[0].obligation_id == "OBL-001"
 
     def test_posting_payload_rejects_missing_contract_id(self):
         with pytest.raises(ValidationError, match="contract_id"):
@@ -439,6 +474,44 @@ class TestPostingPayload:
                 contract_type="Non-Disclosure Agreement",
                 source_file="contract.pdf",
                 jurisdiction="Delaware, USA",
+            )
+
+    def test_posting_payload_rejects_missing_required_sections(self):
+        with pytest.raises(ValidationError, match="obligations"):
+            PostingPayload.model_validate(
+                {
+                    "run_id": "20250101_120000_abc12345",
+                    "contract": {
+                        "contract_id": "clean_nda:DOC-002:contract.pdf",
+                        "bundle_name": "clean_nda",
+                        "contract_type": "Non-Disclosure Agreement",
+                        "source_file": "contract.pdf",
+                        "jurisdiction": "Delaware, USA",
+                    },
+                    "counterparty": {"name": "Acme Corporation"},
+                    "decision": {
+                        "status": "ESCALATE",
+                        "approved": False,
+                        "rationale": "High-severity finding requires approval.",
+                        "requires_human_review": True,
+                    },
+                    "risk": {
+                        "overall_severity": "HIGH",
+                        "summary": "One high-severity finding.",
+                        "final_finding_count": 1,
+                        "critical_finding_count": 0,
+                        "high_finding_count": 1,
+                        "categories": ["clause_risk"],
+                        "findings": [],
+                    },
+                    "approval": {
+                        "approval_required": True,
+                        "routes": [],
+                        "next_approvers": ["legal_counsel"],
+                    },
+                    "artifacts": [],
+                    "artifact_references": {},
+                }
             )
 
 

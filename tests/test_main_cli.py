@@ -158,6 +158,8 @@ def test_valid_bundle_creates_intake_evidence_extraction_and_validation_artifact
     assert posting_payload.counterparty.name
     assert posting_payload.decision.status.value == "AUTO_APPROVE"
     assert posting_payload.risk.summary
+    assert posting_payload.risk.findings == []
+    assert posting_payload.obligations
     assert posting_payload.approval.routes
     assert posting_payload.approval.next_approvers == []
     assert posting_payload.artifacts

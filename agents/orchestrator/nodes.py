@@ -453,6 +453,10 @@ def _copy_reusable_artifacts(
         if filename.endswith(".json"):
             payload = _read_json(source)
             if artifact_name == "posting_payload":
+                payload.setdefault("obligations", [])
+                risk_payload = payload.get("risk")
+                if isinstance(risk_payload, dict):
+                    risk_payload.setdefault("findings", [])
                 payload.update(
                     {
                         "run_id": run_id,
