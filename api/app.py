@@ -84,6 +84,7 @@ def _build_response(
     approval_packet = as_mapping(result.get("approval_packet"))
     decision = as_mapping(approval_packet.get("decision"))
     idempotency_result = as_mapping(result.get("idempotency_result"))
+    jira_posting_result = as_mapping(result.get("jira_posting_result"))
     metrics = as_mapping(result.get("metrics"))
     return ContractReviewResponse(
         run_id=str(result.get("run_id") or ""),
@@ -106,6 +107,21 @@ def _build_response(
         external_posting_allowed=(
             bool(idempotency_result.get("external_posting_allowed"))
             if idempotency_result.get("external_posting_allowed") is not None
+            else None
+        ),
+        jira_posting_status=(
+            str(jira_posting_result.get("status"))
+            if jira_posting_result.get("status") is not None
+            else None
+        ),
+        jira_issue_key=(
+            str(jira_posting_result.get("jira_issue_key"))
+            if jira_posting_result.get("jira_issue_key") is not None
+            else None
+        ),
+        jira_issue_url=(
+            str(jira_posting_result.get("jira_issue_url"))
+            if jira_posting_result.get("jira_issue_url") is not None
             else None
         ),
         bundle_path=bundle_path,

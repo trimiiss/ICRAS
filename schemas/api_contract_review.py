@@ -63,6 +63,18 @@ class ContractReviewResponse(BaseModel):
         default=None,
         description="Whether downstream external posting is allowed for this run.",
     )
+    jira_posting_status: Optional[str] = Field(
+        default=None,
+        description="Safe Jira posting status, when available.",
+    )
+    jira_issue_key: Optional[str] = Field(
+        default=None,
+        description="Created Jira issue key, when available.",
+    )
+    jira_issue_url: Optional[str] = Field(
+        default=None,
+        description="Created Jira issue URL, when available.",
+    )
     bundle_path: str = Field(
         ...,
         description="Generated bundle folder consumed by the pipeline.",

@@ -219,6 +219,7 @@ def _default_config(bundle_path: str) -> Dict[str, Any]:
             "compliance",
             "anomaly",
             "orchestrator",
+            "jira_posting",
         ],
         "orchestration": "langgraph",
         "pipeline_order": [
@@ -230,6 +231,7 @@ def _default_config(bundle_path: str) -> Dict[str, Any]:
             "compliance",
             "anomaly",
             "orchestrator",
+            "jira_posting",
         ],
         "settings": {
             "manual_review_confidence_threshold": 0.75,

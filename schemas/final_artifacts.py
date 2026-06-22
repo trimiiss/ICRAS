@@ -247,6 +247,22 @@ class PipelineMetrics(BaseModel):
         None,
         description="Reason external posting was suppressed, if applicable.",
     )
+    jira_posting_status: Optional[str] = Field(
+        None,
+        description="Safe status for Jira tracker posting, when attempted.",
+    )
+    jira_issue_key: Optional[str] = Field(
+        None,
+        description="Created Jira issue key, when available.",
+    )
+    jira_issue_url: Optional[str] = Field(
+        None,
+        description="Created Jira issue URL, when available.",
+    )
+    jira_posting_reason: Optional[str] = Field(
+        None,
+        description="Reason for the Jira posting status.",
+    )
     overall_severity: Severity = Field(
         ..., description="Highest final finding severity."
     )

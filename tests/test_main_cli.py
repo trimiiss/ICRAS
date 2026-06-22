@@ -1,6 +1,7 @@
 """Tests for the command-line pipeline entry point."""
 
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -17,6 +18,20 @@ NDA_BUNDLE = PROJECT_ROOT / "data" / "bundles" / "clean_nda"
 NET90_SERVICES_BUNDLE = PROJECT_ROOT / "data" / "bundles" / "net90_services_agreement"
 
 
+def _env_without_jira() -> dict[str, str]:
+    """Return a subprocess environment without Jira credentials."""
+    env = os.environ.copy()
+    for name in (
+        "JIRA_BASE_URL",
+        "JIRA_EMAIL",
+        "JIRA_API_TOKEN",
+        "JIRA_PROJECT_KEY",
+        "JIRA_ISSUE_TYPE",
+    ):
+        env.pop(name, None)
+    return env
+
+
 def test_valid_bundle_creates_intake_evidence_extraction_and_validation_artifacts(
     tmp_path: Path,
 ) -> None:
@@ -29,6 +44,7 @@ def test_valid_bundle_creates_intake_evidence_extraction_and_validation_artifact
             str(NDA_BUNDLE),
         ],
         cwd=tmp_path,
+        env=_env_without_jira(),
         capture_output=True,
         text=True,
         encoding="utf-8",
@@ -39,7 +55,12 @@ def test_valid_bundle_creates_intake_evidence_extraction_and_validation_artifact
     assert "Selected bundle:" in result.stdout
     assert "✅ create_run" in result.stdout
     assert "✅ agent_h_finalize" in result.stdout
+    assert "✅ jira_posting" in result.stdout
     assert "Final Decision: AUTO-APPROVE" in result.stdout
+    assert (
+        "Jira Posting: skipped "
+        "(Auto-approved contracts do not require Jira posting.)"
+    ) in result.stdout
     assert "Auto-approve (AUTO_APPROVE)" in result.stdout
     assert "evidence_index.json" in result.stdout
     assert "extracted_contract.json" in result.stdout
@@ -54,6 +75,7 @@ def test_valid_bundle_creates_intake_evidence_extraction_and_validation_artifact
     assert "exceptions.md" in result.stdout
     assert "approval_packet.json" in result.stdout
     assert "posting_payload.json" in result.stdout
+    assert "jira_posting_result.json" in result.stdout
     assert "metrics.json" in result.stdout
 
     run_dirs = list((tmp_path / "runs").iterdir())
@@ -74,6 +96,7 @@ def test_valid_bundle_creates_intake_evidence_extraction_and_validation_artifact
     assert (run_dir / "exceptions.md").is_file()
     assert (run_dir / "approval_packet.json").is_file()
     assert (run_dir / "posting_payload.json").is_file()
+    assert (run_dir / "jira_posting_result.json").is_file()
     assert (run_dir / "metrics.json").is_file()
     assert (run_dir / "audit_log.md").is_file()
 
@@ -141,6 +164,10 @@ def test_valid_bundle_creates_intake_evidence_extraction_and_validation_artifact
     assert set(posting_payload.artifact_references) == {
         artifact.name for artifact in posting_payload.artifacts
     }
+    jira_result = json.loads(
+        (run_dir / "jira_posting_result.json").read_text(encoding="utf-8")
+    )
+    assert jira_result["status"] == "SKIPPED"
 
 
 def test_invalid_bundle_creates_failed_run_with_audit_log(tmp_path: Path) -> None:
@@ -157,6 +184,7 @@ def test_invalid_bundle_creates_failed_run_with_audit_log(tmp_path: Path) -> Non
             str(invalid_bundle),
         ],
         cwd=tmp_path,
+        env=_env_without_jira(),
         capture_output=True,
         text=True,
         encoding="utf-8",
@@ -212,6 +240,7 @@ def test_net90_services_demo_prints_finance_route(tmp_path: Path) -> None:
             str(NET90_SERVICES_BUNDLE),
         ],
         cwd=tmp_path,
+        env=_env_without_jira(),
         capture_output=True,
         text=True,
         encoding="utf-8",
@@ -224,6 +253,7 @@ def test_net90_services_demo_prints_finance_route(tmp_path: Path) -> None:
     assert "✅ validation" in result.stdout
     assert "✅ risk_scoring" in result.stdout
     assert "Final Decision: ESCALATE" in result.stdout
+    assert "Jira Posting: disabled" in result.stdout
     assert "Finance approval (FINANCE)" in result.stdout
     assert "finance_manager" in result.stdout
     assert "Generated artifact paths:" in result.stdout
@@ -243,6 +273,7 @@ def test_net90_services_demo_prints_finance_route(tmp_path: Path) -> None:
         "anomaly_findings.json",
         "approval_packet.json",
         "posting_payload.json",
+        "jira_posting_result.json",
         "metrics.json",
     ]
     assert all((run_dir / artifact_file).is_file() for artifact_file in artifact_files)

@@ -18,6 +18,7 @@ ICRAS runs these functional components in order:
 8. **Anomaly Detection** flags conflicting terms, suspicious dates, and unusual contract patterns.
 9. **Obligation Tracking** produces a structured register of payments, notices, renewals, compliance duties, and other obligations.
 10. **Workflow Orchestration** coordinates execution, merges findings, routes exceptions, writes final artifacts, and generates a CLM-ready posting payload.
+11. **Jira Posting** optionally creates a tracker issue for non-auto-approved reviews when Jira credentials are configured.
 
 ## Repository Layout
 
@@ -146,6 +147,7 @@ final_findings.json
 exceptions.md
 approval_packet.json
 posting_payload.json
+jira_posting_result.json
 metrics.json
 ```
 
@@ -154,8 +156,37 @@ Important outputs:
 - `approval_packet.json` contains the final decision, approval route, grouped exceptions, and evidence-backed reasons.
 - `exceptions.md` is the human-readable exception summary.
 - `posting_payload.json` is a vendor-neutral CLM payload grouped into contract, counterparty, decision, risk, approval, and artifact sections.
+- `jira_posting_result.json` records whether Jira posting was created, skipped, disabled, or failed without exposing secrets.
 - `audit_log.md` and `audit_log.jsonl` provide traceable execution history.
 - `obligations.csv` provides a tabular obligation register for follow-up workflows.
+
+## Optional Jira Posting
+
+Jira posting is disabled by default. To enable it, copy `.env.example` to `.env`
+and set:
+
+```bash
+JIRA_BASE_URL=https://your-site.atlassian.net
+JIRA_EMAIL=your-email@example.com
+JIRA_API_TOKEN=your-api-token
+JIRA_PROJECT_KEY=GEN
+JIRA_ISSUE_TYPE=Task
+```
+
+When configured, ICRAS creates one Jira issue for `ESCALATE` or `REJECT`
+decisions. `AUTO_APPROVE` runs are skipped. Duplicate reruns are also skipped
+through the idempotency guard so the same input does not create another tracker
+ticket.
+
+Duplicate suppression depends on local completed run history in `runs/`. If
+`runs/` is cleared, or if two identical escalated inputs run concurrently, ICRAS
+can still create duplicate Jira issues. Jira-side fingerprint search using the
+`ICRAS_INPUT_FINGERPRINT` marker is planned as future hardening.
+
+If credentials are missing or Jira returns an error, the contract review still
+completes. The outcome is written to `jira_posting_result.json`, summarized in
+`metrics.json`, and shown in the CLI/API using only safe fields such as status,
+issue key, issue URL, and reason.
 
 ## Policy Configuration
 

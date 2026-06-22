@@ -24,6 +24,18 @@ LOW_CONFIDENCE_BUNDLE = (
 )
 
 
+def _clear_jira_env(monkeypatch) -> None:
+    """Keep pipeline tests deterministic even on machines with Jira env vars."""
+    for name in (
+        "JIRA_BASE_URL",
+        "JIRA_EMAIL",
+        "JIRA_API_TOKEN",
+        "JIRA_PROJECT_KEY",
+        "JIRA_ISSUE_TYPE",
+    ):
+        monkeypatch.delenv(name, raising=False)
+
+
 def _evidence(evidence_id: str = "EV-001") -> dict:
     """Return a shared evidence pointer."""
     return {
@@ -272,6 +284,7 @@ def test_agent_h_auto_approves_standard_terms_from_policy() -> None:
 def test_run_pipeline_executes_agent_h_graph(tmp_path: Path, monkeypatch) -> None:
     """The LangGraph pipeline should run all required workflow steps."""
     monkeypatch.chdir(tmp_path)
+    _clear_jira_env(monkeypatch)
 
     result = run_pipeline(str(LOW_CONFIDENCE_BUNDLE))
     metrics = result["metrics"]
@@ -293,6 +306,8 @@ def test_run_pipeline_executes_agent_h_graph(tmp_path: Path, monkeypatch) -> Non
         "approval_decision",
     ]
     assert "created_at" in metrics["determinism_excluded_timestamp_fields"]
+    assert metrics["jira_posting_status"] == "DISABLED"
+    assert metrics["jira_posting_reason"]
     assert result["approval_packet"]["decision"]["status"] in {
         "AUTO_APPROVE",
         "ESCALATE",
@@ -308,10 +323,13 @@ def test_run_pipeline_executes_agent_h_graph(tmp_path: Path, monkeypatch) -> Non
     assert (Path(result["artifact_paths"]["final_findings"])).is_file()
     assert (Path(result["artifact_paths"]["approval_packet"])).is_file()
     assert (Path(result["artifact_paths"]["posting_payload"])).is_file()
+    assert (Path(result["artifact_paths"]["jira_posting_result"])).is_file()
+    assert result["jira_posting_result"]["status"] == "DISABLED"
     metrics_path = Path(result["artifact_paths"]["metrics"])
     assert metrics_path.is_file()
     saved_metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
     assert saved_metrics["exception_count"] == metrics["exception_count"]
+    assert saved_metrics["jira_posting_status"] == "DISABLED"
 
     audit_log_path = Path(result["artifact_paths"]["audit_log"])
     audit_log = audit_log_path.read_text(encoding="utf-8")
@@ -322,6 +340,8 @@ def test_run_pipeline_executes_agent_h_graph(tmp_path: Path, monkeypatch) -> Non
     assert "anomaly_completed" in audit_log
     assert "OCR Used" in audit_log
     assert "agent_h_finalize_completed" in audit_log
+    assert "jira_posting_completed" in audit_log
+    assert "Jira Posting Status: DISABLED" in audit_log
     assert "Started At" in audit_log
     assert "Finished At" in audit_log
     assert "#### Inputs" in audit_log
@@ -349,7 +369,8 @@ def test_run_pipeline_executes_agent_h_graph(tmp_path: Path, monkeypatch) -> Non
     assert posting_payload.approval.routes
     assert posting_payload.approval.next_approvers
     assert posting_payload.artifacts
-    assert set(posting_payload.artifact_references) == set(result["artifact_paths"])
+    assert "jira_posting_result" not in posting_payload.artifact_references
+    assert set(posting_payload.artifact_references).issubset(set(result["artifact_paths"]))
 
     steps = [event["step"] for event in result["step_events"]]
     assert steps.index("counterparty") < steps.index("risk_scoring")
@@ -357,7 +378,8 @@ def test_run_pipeline_executes_agent_h_graph(tmp_path: Path, monkeypatch) -> Non
     assert steps.index("risk_scoring") < steps.index("compliance")
     assert steps.index("compliance") < steps.index("anomaly")
     assert steps.index("anomaly") < steps.index("obligation_register")
-    assert steps[-1] == "agent_h_finalize"
+    assert steps.index("agent_h_finalize") < steps.index("jira_posting")
+    assert steps[-1] == "jira_posting"
 
 
 def test_audit_log_structure_is_stable_for_same_bundle(
@@ -366,6 +388,7 @@ def test_audit_log_structure_is_stable_for_same_bundle(
 ) -> None:
     """Re-running the same bundle should log the idempotent reuse decision."""
     monkeypatch.chdir(tmp_path)
+    _clear_jira_env(monkeypatch)
 
     first_result = run_pipeline(str(NDA_BUNDLE))
     second_result = run_pipeline(str(NDA_BUNDLE))
@@ -378,8 +401,17 @@ def test_audit_log_structure_is_stable_for_same_bundle(
     )
 
     assert "Idempotency Status: new" in first_log
-    assert "idempotency_duplicate_detected" in second_log
-    assert "idempotency_results_reused" in second_log
+    assert "Idempotency Status: duplicate" in second_log
+    assert "Jira Posting Status: SKIPPED" in second_log
+    second_audit_events = [
+        json.loads(line)
+        for line in Path(second_result["artifact_paths"]["audit_log_jsonl"])
+        .read_text(encoding="utf-8")
+        .splitlines()
+    ]
+    event_names = {event["event"] for event in second_audit_events}
+    assert "idempotency_duplicate_detected" in event_names
+    assert "idempotency_results_reused" in event_names
     assert second_result["idempotency_result"]["status"] == "duplicate"
     assert (
         second_result["idempotency_result"]["baseline_run_id"]
@@ -394,6 +426,7 @@ def test_determinism_check_passes_for_identical_bundle_rerun(
 ) -> None:
     """The second same-bundle run should be detected as idempotent duplicate."""
     monkeypatch.chdir(tmp_path)
+    _clear_jira_env(monkeypatch)
 
     first_result = run_pipeline(str(NDA_BUNDLE))
     second_result = run_pipeline(str(NDA_BUNDLE))
@@ -406,6 +439,7 @@ def test_determinism_check_passes_for_identical_bundle_rerun(
     assert second_metrics["idempotency_status"] == "duplicate"
     assert second_metrics["idempotency_baseline_run_id"] == first_result["run_id"]
     assert second_metrics["external_posting_allowed"] is False
+    assert second_metrics["jira_posting_status"] == "SKIPPED"
     assert second_metrics["determinism_differences"] == []
     assert second_metrics["determinism_compared_sections"] == [
         "risk_result",
@@ -419,6 +453,7 @@ def test_determinism_check_passes_for_identical_bundle_rerun(
     assert saved_metrics["determinism_check"] == "REUSED"
     assert saved_metrics["determinism_baseline_run_id"] == first_result["run_id"]
     assert saved_metrics["idempotency_status"] == "duplicate"
+    assert saved_metrics["jira_posting_status"] == "SKIPPED"
 
     idempotency_path = Path(second_result["artifact_paths"]["idempotency_result"])
     assert idempotency_path.is_file()
@@ -434,6 +469,14 @@ def test_determinism_check_passes_for_identical_bundle_rerun(
     assert posting_payload["run_id"] == second_result["run_id"]
     assert posting_payload["external_posting_allowed"] is False
     assert posting_payload["duplicate_of_run_id"] == first_result["run_id"]
+
+    jira_result = json.loads(
+        Path(second_result["artifact_paths"]["jira_posting_result"]).read_text(
+            encoding="utf-8"
+        )
+    )
+    assert jira_result["status"] == "SKIPPED"
+    assert "Duplicate input fingerprint" in jira_result["reason"]
 
 
 def test_determinism_comparison_ignores_timestamps_and_reports_differences() -> None:

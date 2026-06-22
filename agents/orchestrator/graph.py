@@ -25,6 +25,7 @@ from agents.orchestrator.nodes import (
     idempotency_check_node,
     idempotent_reuse_node,
     intake_node,
+    jira_posting_node,
     load_bundle_node,
     obligation_register_node,
     risk_node,
@@ -62,6 +63,7 @@ def build_pipeline_graph() -> Any:
         _pipeline_node("obligation_register", "orchestrator_agent", obligation_register_node),
     )
     builder.add_node("agent_h_finalize", _pipeline_node("agent_h_finalize", "orchestrator_agent", finalize_node))
+    builder.add_node("jira_posting", _pipeline_node("jira_posting", "jira_posting", jira_posting_node))
 
     builder.add_edge(START, "create_run")
     builder.add_edge("create_run", "load_bundle")
@@ -71,7 +73,7 @@ def build_pipeline_graph() -> Any:
         _route_after_idempotency_check,
         {"new": "intake", "duplicate": "idempotent_reuse"},
     )
-    builder.add_edge("idempotent_reuse", END)
+    builder.add_edge("idempotent_reuse", "jira_posting")
     builder.add_edge("intake", "evidence_index")
     builder.add_edge("evidence_index", "extraction")
     builder.add_edge("extraction", "counterparty")
@@ -82,7 +84,8 @@ def build_pipeline_graph() -> Any:
     builder.add_edge("compliance", "anomaly")
     builder.add_edge("anomaly", "obligation_register")
     builder.add_edge("obligation_register", "agent_h_finalize")
-    builder.add_edge("agent_h_finalize", END)
+    builder.add_edge("agent_h_finalize", "jira_posting")
+    builder.add_edge("jira_posting", END)
     return builder.compile()
 
 
@@ -168,14 +171,18 @@ def _pipeline_node(
             )
         node_update = dict(update)
         node_update["step_events"] = [step_trace]
-        if step_name == "agent_h_finalize" and completed_run_dir:
+        if step_name == "jira_posting" and completed_run_dir:
             write_final_audit_markdown(
                 run_dir=Path(completed_run_dir),
                 run_id=str(update.get("run_id") or state.get("run_id") or ""),
                 step_events=[*(state.get("step_events") or []), step_trace],
-                metrics=_as_mapping(update.get("metrics")),
-                approval_packet=_as_mapping(update.get("approval_packet")),
-                final_findings=_as_mapping(update.get("final_findings")),
+                metrics=_as_mapping(update.get("metrics") or state.get("metrics")),
+                approval_packet=_as_mapping(
+                    update.get("approval_packet") or state.get("approval_packet")
+                ),
+                final_findings=_as_mapping(
+                    update.get("final_findings") or state.get("final_findings")
+                ),
                 extracted_contract=_as_mapping(state.get("extracted_contract")),
                 artifact_paths=_as_mapping(update.get("artifact_paths")),
             )
@@ -289,6 +296,7 @@ def _audit_input_paths(step_name: str, state: PipelineState) -> dict[str, str]:
             "obligation_register",
             "anomaly",
             "agent_h_finalize",
+            "jira_posting",
         }:
             contract_path = bundle_data.get("contract_path")
             if isinstance(contract_path, str) and contract_path:

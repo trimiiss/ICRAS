@@ -24,6 +24,7 @@ from utils.idempotency import (
     build_bundle_fingerprint,
     find_completed_run_by_fingerprint,
 )
+from utils.jira_posting import run_jira_posting
 from utils.run_manager import (
     append_audit_event,
     create_run_folder,
@@ -330,6 +331,61 @@ def finalize_node(state: PipelineState) -> PipelineState:
     return finalize_pipeline(state)
 
 
+def jira_posting_node(state: PipelineState) -> PipelineState:
+    """Post final review results to Jira when configured and allowed."""
+    run_id = require_state_str(state, "run_id")
+    run_dir = Path(require_state_str(state, "run_dir"))
+    artifact_paths = dict(state.get("artifact_paths", {}))
+    result = run_jira_posting(
+        run_id=run_id,
+        approval_packet_data=require_state_mapping(state, "approval_packet"),
+        posting_payload_data=require_state_mapping(state, "posting_payload"),
+        idempotency_result=require_state_mapping(state, "idempotency_result"),
+        artifact_paths=artifact_paths,
+    ).model_dump(mode="json")
+    result_path = run_dir / "jira_posting_result.json"
+    _write_json(result_path, result)
+
+    updated_artifact_paths = {
+        **artifact_paths,
+        "jira_posting_result": str(result_path),
+    }
+    updated_metrics = _metrics_with_jira_posting(
+        metrics=require_state_mapping(state, "metrics"),
+        jira_posting_result=result,
+        artifact_paths=updated_artifact_paths,
+    )
+    metrics_path = updated_artifact_paths.get("metrics")
+    if metrics_path:
+        _write_json(Path(metrics_path), updated_metrics)
+
+    update_run_metadata(
+        run_dir,
+        {
+            "jira_posting_status": result["status"],
+            "jira_issue_key": result.get("jira_issue_key"),
+            "jira_posting_reason": result.get("reason"),
+        },
+    )
+    append_audit_event(
+        run_dir,
+        {
+            "event": _jira_posting_event_name(str(result["status"])),
+            "agent": "jira_posting",
+            "message": str(result.get("reason") or ""),
+            "jira_posting_status": result["status"],
+            "jira_issue_key": result.get("jira_issue_key"),
+            "jira_issue_url": result.get("jira_issue_url"),
+            "error": result.get("error_message"),
+        },
+    )
+    return {
+        "jira_posting_result": result,
+        "metrics": updated_metrics,
+        "artifact_paths": updated_artifact_paths,
+    }
+
+
 def _build_idempotency_result(
     run_id: str,
     run_dir: Path,
@@ -474,3 +530,29 @@ def _write_json(path: Path, payload: dict[str, object]) -> None:
     with path.open("w", encoding="utf-8") as file:
         json.dump(payload, file, indent=2, ensure_ascii=False, sort_keys=True)
         file.write("\n")
+
+
+def _metrics_with_jira_posting(
+    metrics: dict[str, object],
+    jira_posting_result: dict[str, object],
+    artifact_paths: dict[str, str],
+) -> dict[str, object]:
+    """Return metrics updated with safe Jira posting fields."""
+    updated = {
+        **metrics,
+        "jira_posting_status": jira_posting_result.get("status"),
+        "jira_issue_key": jira_posting_result.get("jira_issue_key"),
+        "jira_issue_url": jira_posting_result.get("jira_issue_url"),
+        "jira_posting_reason": jira_posting_result.get("reason"),
+        "artifact_paths": artifact_paths,
+    }
+    return PipelineMetrics.model_validate(updated).model_dump(mode="json")
+
+
+def _jira_posting_event_name(status: str) -> str:
+    """Return the audit event name for a Jira posting status."""
+    if status == "CREATED":
+        return "jira_posting_created"
+    if status == "FAILED":
+        return "jira_posting_failed"
+    return "jira_posting_skipped"

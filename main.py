@@ -82,6 +82,7 @@ def _print_run_summary(result: Mapping[str, Any]) -> None:
         print(f"  {marker} {step} ({agent}) - {duration_text}")
 
     print(f"\nFinal Decision: {_display_status(status)}")
+    _print_jira_posting_status(result)
     print("Approval Route:")
     _print_approval_route(approval_packet)
 
@@ -161,6 +162,23 @@ def _print_idempotency_status(result: Mapping[str, Any]) -> None:
     if idempotency.get("external_posting_allowed") is False:
         reason = str(idempotency.get("posting_suppression_reason") or "")
         print(f"External posting: suppressed ({reason})")
+
+
+def _print_jira_posting_status(result: Mapping[str, Any]) -> None:
+    """Print a compact Jira posting result when available."""
+    jira_result = result.get("jira_posting_result")
+    if not isinstance(jira_result, Mapping):
+        return
+    status = str(jira_result.get("status") or "").lower()
+    reason = str(jira_result.get("reason") or "")
+    issue_key = jira_result.get("jira_issue_key")
+    if issue_key:
+        print(f"Jira Posting: {status} {issue_key}")
+        return
+    if reason:
+        print(f"Jira Posting: {status} ({reason})")
+        return
+    print(f"Jira Posting: {status}")
 
 
 def _route_label(category: str) -> str:
