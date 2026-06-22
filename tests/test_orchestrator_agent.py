@@ -1,7 +1,6 @@
 """Tests for workflow orchestration."""
 
 import json
-import re
 from pathlib import Path
 
 from agents.orchestrator import (
@@ -65,19 +64,6 @@ def _finding(
         "manual_review_required": manual_review_required,
         "risk_engine_ready": True,
     }
-
-
-def _audit_structure_lines(audit_log: str) -> list[str]:
-    """Return audit headings and labels while removing run-specific values."""
-    structure: list[str] = []
-    for line in audit_log.splitlines():
-        if line.startswith("#"):
-            structure.append(line)
-        elif re.match(r"^\d+\. ", line):
-            structure.append(line)
-        elif line.startswith("- ") and ":" in line:
-            structure.append(f"{line.split(':', 1)[0]}:")
-    return structure
 
 
 def test_agent_h_deduplicates_and_sorts_findings_by_severity() -> None:
@@ -378,7 +364,7 @@ def test_audit_log_structure_is_stable_for_same_bundle(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
-    """Re-running the same bundle should produce the same audit log structure."""
+    """Re-running the same bundle should log the idempotent reuse decision."""
     monkeypatch.chdir(tmp_path)
 
     first_result = run_pipeline(str(NDA_BUNDLE))
@@ -391,7 +377,14 @@ def test_audit_log_structure_is_stable_for_same_bundle(
         encoding="utf-8"
     )
 
-    assert _audit_structure_lines(first_log) == _audit_structure_lines(second_log)
+    assert "Idempotency Status: new" in first_log
+    assert "idempotency_duplicate_detected" in second_log
+    assert "idempotency_results_reused" in second_log
+    assert second_result["idempotency_result"]["status"] == "duplicate"
+    assert (
+        second_result["idempotency_result"]["baseline_run_id"]
+        == first_result["run_id"]
+    )
     assert set(first_result["metrics"]) == set(second_result["metrics"])
 
 
@@ -399,15 +392,20 @@ def test_determinism_check_passes_for_identical_bundle_rerun(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
-    """The second same-bundle run should compare cleanly against the first run."""
+    """The second same-bundle run should be detected as idempotent duplicate."""
     monkeypatch.chdir(tmp_path)
 
     first_result = run_pipeline(str(NDA_BUNDLE))
     second_result = run_pipeline(str(NDA_BUNDLE))
     second_metrics = second_result["metrics"]
 
-    assert second_metrics["determinism_check"] == "PASS"
+    assert second_result["idempotency_result"]["status"] == "duplicate"
+    assert second_result["idempotency_result"]["external_posting_allowed"] is False
+    assert second_metrics["determinism_check"] == "REUSED"
     assert second_metrics["determinism_baseline_run_id"] == first_result["run_id"]
+    assert second_metrics["idempotency_status"] == "duplicate"
+    assert second_metrics["idempotency_baseline_run_id"] == first_result["run_id"]
+    assert second_metrics["external_posting_allowed"] is False
     assert second_metrics["determinism_differences"] == []
     assert second_metrics["determinism_compared_sections"] == [
         "risk_result",
@@ -418,8 +416,24 @@ def test_determinism_check_passes_for_identical_bundle_rerun(
     saved_metrics = json.loads(
         Path(second_result["artifact_paths"]["metrics"]).read_text(encoding="utf-8")
     )
-    assert saved_metrics["determinism_check"] == "PASS"
+    assert saved_metrics["determinism_check"] == "REUSED"
     assert saved_metrics["determinism_baseline_run_id"] == first_result["run_id"]
+    assert saved_metrics["idempotency_status"] == "duplicate"
+
+    idempotency_path = Path(second_result["artifact_paths"]["idempotency_result"])
+    assert idempotency_path.is_file()
+    saved_idempotency = json.loads(idempotency_path.read_text(encoding="utf-8"))
+    assert saved_idempotency["baseline_run_id"] == first_result["run_id"]
+    assert saved_idempotency["external_posting_allowed"] is False
+
+    posting_payload = json.loads(
+        Path(second_result["artifact_paths"]["posting_payload"]).read_text(
+            encoding="utf-8"
+        )
+    )
+    assert posting_payload["run_id"] == second_result["run_id"]
+    assert posting_payload["external_posting_allowed"] is False
+    assert posting_payload["duplicate_of_run_id"] == first_result["run_id"]
 
 
 def test_determinism_comparison_ignores_timestamps_and_reports_differences() -> None:

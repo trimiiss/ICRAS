@@ -125,6 +125,10 @@ def write_final_audit_markdown(
         f"- OCR Average Confidence: {_format_metric(metrics.get('ocr_average_confidence'))}",
         f"- OCR Manual Review Required: {'yes' if metrics.get('ocr_manual_review_required') else 'no'}",
         f"- Low-Confidence Count: {metrics.get('low_confidence_count', 0)}",
+        f"- Idempotency Status: {metrics.get('idempotency_status', 'new')}",
+        f"- Idempotency Baseline Run ID: {metrics.get('idempotency_baseline_run_id') or 'None'}",
+        f"- External Posting Allowed: {'yes' if metrics.get('external_posting_allowed', True) else 'no'}",
+        f"- Posting Suppression Reason: {metrics.get('posting_suppression_reason') or 'None'}",
         "",
         "## Workflow Order",
     ]
@@ -295,4 +299,3 @@ def _format_evidence_list(evidence_items: Sequence[EvidencePointer]) -> str:
         ]
         formatted.append(" | ".join(bit for bit in evidence_bits if bit))
     return "; ".join(value for value in formatted if value) or "No evidence pointer"
-

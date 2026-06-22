@@ -28,6 +28,7 @@ def build_metrics(
     """Build final pipeline metrics."""
     run_info = require_state_mapping(state, "run_info")
     metadata = _as_mapping(run_info.get("metadata"))
+    idempotency_result = _as_mapping(state.get("idempotency_result"))
     extracted_contract = require_state_mapping(state, "extracted_contract")
     validation_result = require_state_mapping(state, "validation_result")
     risk_result = require_state_mapping(state, "risk_result")
@@ -127,6 +128,21 @@ def build_metrics(
             str(difference)
             for difference in determinism_result.get("determinism_differences", [])
         ],
+        idempotency_status=str(
+            idempotency_result.get("status")
+            or metadata.get("idempotency_status")
+            or "new"
+        ),
+        idempotency_baseline_run_id=_optional_str(
+            idempotency_result.get("baseline_run_id")
+            or metadata.get("idempotency_baseline_run_id")
+        ),
+        external_posting_allowed=bool(
+            idempotency_result.get("external_posting_allowed", True)
+        ),
+        posting_suppression_reason=_optional_str(
+            idempotency_result.get("posting_suppression_reason")
+        ),
         overall_severity=overall_severity,
         artifact_paths=dict(artifact_paths),
     )

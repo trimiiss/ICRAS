@@ -51,6 +51,18 @@ class ContractReviewResponse(BaseModel):
         default=None,
         description="Final approval decision status, when available.",
     )
+    idempotency_status: Optional[str] = Field(
+        default=None,
+        description="Whether the run processed new inputs or reused a duplicate run.",
+    )
+    duplicate_of_run_id: Optional[str] = Field(
+        default=None,
+        description="Baseline run ID reused for duplicate input, when applicable.",
+    )
+    external_posting_allowed: Optional[bool] = Field(
+        default=None,
+        description="Whether downstream external posting is allowed for this run.",
+    )
     bundle_path: str = Field(
         ...,
         description="Generated bundle folder consumed by the pipeline.",
@@ -63,4 +75,3 @@ class ContractReviewResponse(BaseModel):
         default_factory=lambda: datetime.now(timezone.utc),
         description="Timestamp when the API response was created.",
     )
-

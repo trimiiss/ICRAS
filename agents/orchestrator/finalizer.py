@@ -172,6 +172,7 @@ def finalize_pipeline(state: Mapping[str, Any]) -> dict[str, Any]:
         "approval_packet": approval_packet.model_dump(mode="json"),
         "posting_payload": posting_payload.model_dump(mode="json"),
         "metrics": metrics.model_dump(mode="json"),
+        "idempotency_result": _as_mapping(state.get("idempotency_result")),
         "artifact_paths": artifact_paths,
     }
 

@@ -63,6 +63,7 @@ class PipelineState(TypedDict, total=False):
     approval_packet: dict[str, Any]
     posting_payload: dict[str, Any]
     metrics: dict[str, Any]
+    idempotency_result: dict[str, Any]
     artifact_paths: Annotated[dict[str, str], merge_dicts]
     step_events: Annotated[list[dict[str, Any]], append_lists]
 
@@ -70,6 +71,7 @@ class PipelineState(TypedDict, total=False):
 PIPELINE_STEP_ORDER: tuple[str, ...] = (
     "create_run",
     "load_bundle",
+    "idempotency_check",
     "intake",
     "evidence_index",
     "extraction",
@@ -83,6 +85,7 @@ PIPELINE_STEP_ORDER: tuple[str, ...] = (
 )
 
 STEP_INPUT_ARTIFACTS: dict[str, tuple[str, ...]] = {
+    "idempotency_check": ("metadata",),
     "evidence_index": ("document_inventory",),
     "extraction": ("document_inventory", "evidence_index"),
     "counterparty": ("context_packet", "extracted_contract", "evidence_index"),
@@ -103,4 +106,5 @@ STEP_INPUT_ARTIFACTS: dict[str, tuple[str, ...]] = {
         "anomaly_findings",
         "obligations",
     ),
+    "idempotent_reuse": ("idempotency_result",),
 }

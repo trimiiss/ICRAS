@@ -157,6 +157,18 @@ class PostingPayload(BaseModel):
         default=None,
         description="Primary contract file path from the bundle.",
     )
+    external_posting_allowed: bool = Field(
+        default=True,
+        description="Whether downstream external posting is allowed.",
+    )
+    duplicate_of_run_id: Optional[str] = Field(
+        default=None,
+        description="Baseline run ID when this payload belongs to a duplicate rerun.",
+    )
+    posting_suppression_reason: Optional[str] = Field(
+        default=None,
+        description="Reason external posting is suppressed, if applicable.",
+    )
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc),
         description="Timestamp when the payload was generated.",

@@ -18,6 +18,7 @@ from utils.run_manager import (
     append_audit_event,
     create_run_folder,
     create_run_id,
+    update_run_metadata,
     update_run_status,
 )
 
@@ -77,6 +78,25 @@ class TestCreateRunFolder:
             assert "created_at" in metadata
             assert "status" in metadata
             assert metadata["status"] == "initialized"
+
+    def test_metadata_accepts_idempotency_fields(self):
+        """metadata.json should persist optional idempotency fields."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            runs_dir = Path(tmpdir) / "runs"
+            result = create_run_folder(
+                bundle_path=str(NDA_BUNDLE),
+                runs_dir=runs_dir,
+                metadata_extra={
+                    "contract_sha256": "contract-hash",
+                    "input_fingerprint_sha256": "fingerprint-hash",
+                },
+            )
+
+            metadata_path = Path(result["run_dir"]) / "metadata.json"
+            metadata = json.loads(metadata_path.read_text())
+
+            assert metadata["contract_sha256"] == "contract-hash"
+            assert metadata["input_fingerprint_sha256"] == "fingerprint-hash"
 
     def test_config_contains_pipeline_info(self):
         """config.json must contain pipeline configuration."""
@@ -223,4 +243,28 @@ class TestRunAuditAndStatus:
             assert metadata["status"] == "failed"
             assert saved_metadata["status"] == "failed"
             assert saved_metadata["error_message"] == "Bundle validation failed."
+            assert "updated_at" in saved_metadata
+
+    def test_update_run_metadata_merges_fields(self):
+        """Run metadata updates should preserve existing fields."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            runs_dir = Path(tmpdir) / "runs"
+            result = create_run_folder(
+                bundle_path=str(NDA_BUNDLE),
+                runs_dir=runs_dir,
+            )
+
+            metadata = update_run_metadata(
+                result["run_dir"],
+                {
+                    "idempotency_status": "duplicate",
+                    "idempotency_baseline_run_id": "baseline-run",
+                },
+            )
+
+            metadata_path = Path(result["run_dir"]) / "metadata.json"
+            saved_metadata = json.loads(metadata_path.read_text())
+            assert metadata["run_id"] == result["run_id"]
+            assert saved_metadata["idempotency_status"] == "duplicate"
+            assert saved_metadata["idempotency_baseline_run_id"] == "baseline-run"
             assert "updated_at" in saved_metadata
